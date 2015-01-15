@@ -62,6 +62,10 @@ impl Parser {
         let attrs = self.parse_attributes();
         assert!(self.consume_char() == '>');
 
+        if self.is_self_closing_tag(tag_name.as_slice()) {
+            return dom::elem(tag_name, attrs, Vec::new());
+        }
+
         // Contents.
         let children = self.parse_nodes();
 
@@ -162,5 +166,10 @@ impl Parser {
             assert!(self.consume_char() == '>');
             self.consume_whitespace();
         }
+    }
+
+    fn is_self_closing_tag(&self, tag_name: &str) -> bool {
+        let self_closing_tags = vec!["input", "meta"];
+        return self_closing_tags.contains(&tag_name);
     }
 }
