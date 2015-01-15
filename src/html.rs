@@ -54,6 +54,8 @@ impl Parser {
 
     /// Parse a single element, including its open tag, contents, and closing tag.
     fn parse_element(&mut self) -> dom::Node {
+        self.consume_comment();
+
         // Opening tag.
         assert!(self.consume_char() == '<');
         let tag_name = self.parse_tag_name();
@@ -150,5 +152,15 @@ impl Parser {
     /// Return true if all input is consumed.
     fn eof(&self) -> bool {
         self.pos >= self.input.len()
+    }
+
+    fn consume_comment(&mut self) {
+        while self.starts_with("<!") {
+            assert!(self.consume_char() == '<');
+            assert!(self.consume_char() == '!');
+            self.consume_while(|c| c != '>');
+            assert!(self.consume_char() == '>');
+            self.consume_whitespace();
+        }
     }
 }
