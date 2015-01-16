@@ -23,6 +23,7 @@ pub struct Rule {
 #[derive(Show)]
 pub enum Selector {
     Simple(SimpleSelector),
+    Complex(ComplexSelector),
 }
 
 #[derive(Show)]
@@ -31,6 +32,8 @@ pub struct SimpleSelector {
     pub id: Option<String>,
     pub class: Vec<String>,
 }
+
+pub type ComplexSelector = Vec<SimpleSelector>;
 
 #[derive(Show)]
 pub struct Declaration {
@@ -65,11 +68,23 @@ pub type Specificity = (usize, usize, usize);
 impl Selector {
     pub fn specificity(&self) -> Specificity {
         // http://www.w3.org/TR/selectors/#specificity
-        let Selector::Simple(ref simple) = *self;
-        let a = simple.id.iter().len();
-        let b = simple.class.len();
-        let c = simple.tag_name.iter().len();
-        (a, b, c)
+        match *self {
+            Selector::Simple(ref simple) => {
+                let a = simple.id.iter().len();
+                let b = simple.class.len();
+                let c = simple.tag_name.iter().len();
+                return (a, b, c);
+            },
+            Selector::Complex(ref complex) => {
+                let mut specificity = (0, 0, 0);
+                for i in complex.iter() {
+                    specificity.0 += i.id.iter().len();
+                    specificity.1 += i.class.len();
+                    specificity.2 += i.tag_name.iter().len();
+                }
+                return specificity;
+            }
+        }
     }
 }
 
@@ -109,7 +124,7 @@ impl Parser {
     /// Parse a rule set: `<selectors> { <declarations> }`.
     fn parse_rule(&mut self) -> Rule {
         Rule {
-            selectors: self.parse_selectors(),
+            selectors: self.parse_all_selectors(),
             declarations: self.parse_declarations(),
         }
     }
@@ -124,6 +139,33 @@ impl Parser {
                 ',' => { self.consume_char(); self.consume_whitespace(); }
                 '{' => break,
                 c   => panic!("Unexpected character {} in selector list", c)
+            }
+        }
+        // Return selectors with highest specificity first, for use in matching.
+        selectors.sort_by(|a,b| b.specificity().cmp(&a.specificity()));
+        return selectors;
+    }
+
+    fn parse_all_selectors(&mut self) -> Vec<Selector> {
+        let mut selectors: Vec<Selector> = Vec::new();
+        let mut simple;
+
+        while self.next_char() != '{' {
+            let mut complex: Vec<SimpleSelector> = Vec::new();
+            loop {
+                simple = self.parse_simple_selector();
+                self.consume_whitespace();
+                match self.next_char() {
+                    ',' => { self.consume_char(); self.consume_whitespace(); break; },
+                    '{' => break,
+                    c => complex.push(simple)
+                }
+            }
+            if complex.is_empty() {
+                selectors.push(Selector::Simple(simple));
+            } else {
+                complex.push(simple);
+                selectors.push(Selector::Complex(complex));
             }
         }
         // Return selectors with highest specificity first, for use in matching.
@@ -174,11 +216,14 @@ impl Parser {
 
     /// Parse one `<property>: <value>;` declaration.
     fn parse_declaration(&mut self) -> Declaration {
+        self.consume_comment();
+
         let property_name = self.parse_identifier();
         self.consume_whitespace();
         assert!(self.consume_char() == ':');
         self.consume_whitespace();
-        let value = self.parse_value();
+        // let value = self.parse_value();
+        let value = Value::Keyword(self.parse_value_to_string());
         self.consume_whitespace();
         assert!(self.consume_char() == ';');
 
@@ -196,6 +241,10 @@ impl Parser {
             '#' => self.parse_color(),
             _ => Value::Keyword(self.parse_identifier())
         }
+    }
+
+    fn parse_value_to_string(&mut self) -> String {
+        self.consume_while(|c| c != ';')
     }
 
     fn parse_length(&mut self) -> Value {
@@ -268,6 +317,21 @@ impl Parser {
     /// Return true if all input is consumed.
     fn eof(&self) -> bool {
         self.pos >= self.input.len()
+    }
+
+    /// Does the current input start with the given string?
+    fn starts_with(&self, s: &str) -> bool {
+        self.input.slice_from(self.pos).starts_with(s)
+    }
+
+    fn consume_comment(&mut self) {
+        while self.starts_with("/*") {
+            assert!(self.consume_char() == '/');
+            assert!(self.consume_char() == '*');
+            self.consume_while(|c| c != '/');
+            assert!(self.consume_char() == '/');
+            self.consume_whitespace();
+        }
     }
 }
 

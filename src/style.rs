@@ -103,7 +103,8 @@ fn match_rule<'a>(elem: &ElementData, rule: &'a Rule) -> Option<MatchedRule<'a>>
 /// Selector matching:
 fn matches(elem: &ElementData, selector: &Selector) -> bool {
     match *selector {
-        Selector::Simple(ref simple_selector) => matches_simple_selector(elem, simple_selector)
+        Selector::Simple(ref simple_selector) => matches_simple_selector(elem, simple_selector),
+        Selector::Complex(ref complex_selector) => matches_complex_selector(elem, complex_selector)
     }
 }
 
@@ -126,4 +127,13 @@ fn matches_simple_selector(elem: &ElementData, selector: &SimpleSelector) -> boo
 
     // We didn't find any non-matching selector components.
     return true;
+}
+
+fn matches_complex_selector(elem: &ElementData, selector: &Vec<SimpleSelector>) -> bool {
+    for i in selector.iter() {
+        if matches_simple_selector(elem, i) {
+            return true;
+        }
+    }
+    return false;
 }
