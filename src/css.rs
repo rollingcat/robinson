@@ -23,7 +23,7 @@ pub struct Rule {
 #[derive(Show)]
 pub enum Selector {
     Simple(SimpleSelector),
-    Complex(ComplexSelector),
+    Descendant(DescendantSelector),
 }
 
 #[derive(Show)]
@@ -33,7 +33,7 @@ pub struct SimpleSelector {
     pub class: Vec<String>,
 }
 
-pub type ComplexSelector = Vec<SimpleSelector>;
+pub type DescendantSelector = Vec<SimpleSelector>;
 
 #[derive(Show)]
 pub struct Declaration {
@@ -75,9 +75,9 @@ impl Selector {
                 let c = simple.tag_name.iter().len();
                 return (a, b, c);
             },
-            Selector::Complex(ref complex) => {
+            Selector::Descendant(ref descendant) => {
                 let mut specificity = (0, 0, 0);
-                for i in complex.iter() {
+                for i in descendant.iter() {
                     specificity.0 += i.id.iter().len();
                     specificity.1 += i.class.len();
                     specificity.2 += i.tag_name.iter().len();
@@ -151,21 +151,21 @@ impl Parser {
         let mut simple;
 
         while self.next_char() != '{' {
-            let mut complex: Vec<SimpleSelector> = Vec::new();
+            let mut descendant: Vec<SimpleSelector> = Vec::new();
             loop {
                 simple = self.parse_simple_selector();
                 self.consume_whitespace();
                 match self.next_char() {
                     ',' => { self.consume_char(); self.consume_whitespace(); break; },
                     '{' => break,
-                    c => complex.push(simple)
+                    c => descendant.push(simple)
                 }
             }
-            if complex.is_empty() {
+            if descendant.is_empty() {
                 selectors.push(Selector::Simple(simple));
             } else {
-                complex.push(simple);
-                selectors.push(Selector::Complex(complex));
+                descendant.push(simple);
+                selectors.push(Selector::Descendant(descendant));
             }
         }
         // Return selectors with highest specificity first, for use in matching.
