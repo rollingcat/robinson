@@ -141,7 +141,7 @@ fn matches_descendant_selector(node: Rc<Node>, elem: &ElementData, selector: &[S
     }
 
     let current_selector = selector.slice(0, selector.len() - 1);
-    return matches_ancester(node, current_selector);
+    return matches_ancestor(node, current_selector);
 }
 
 fn matches_ancestor(node: Rc<Node>, selector: &[SimpleSelector]) -> bool {
@@ -171,7 +171,7 @@ fn matches_ancestor(node: Rc<Node>, selector: &[SimpleSelector]) -> bool {
         None => return false,
     }
 
-    return matches_ancester(matching_node.unwrap(), selector.slice(0, selector.len() - 1));
+    return matches_ancestor(matching_node.unwrap(), selector.slice(0, selector.len() - 1));
 }
 
 fn get_parent(node: &Rc<Node>) -> Option<Rc<Node>> {
