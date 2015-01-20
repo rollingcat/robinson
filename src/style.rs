@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::rc::Weak;
 
 use dom;
+use css;
 
 /// Map from CSS property names to values.
 pub type PropertyMap =  HashMap<String, Value>;
@@ -179,4 +180,18 @@ fn get_parent(node: &Rc<Node>) -> Option<Rc<Node>> {
         return None;
     }
     node.parent.borrow().last().unwrap().upgrade()
+}
+
+pub fn show(style_node: &StyledNode, depth: usize) {
+    dom::show(&style_node.node);
+
+    for (key, value) in style_node.specified_values.iter() {
+        if let Value::Keyword(ref value_string) = *value {
+            println!("{}: {}", key, value_string)
+        }
+    }
+
+    for i in style_node.children.iter() {
+        show(i, depth + 1);
+    }
 }
