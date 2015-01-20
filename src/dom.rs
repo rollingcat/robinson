@@ -2,12 +2,18 @@
 
 use std::collections::{HashMap,HashSet};
 
+use std::rc::Rc;
+use std::rc::Weak;
+use std::cell::RefCell;
+
 pub type AttrMap = HashMap<String, String>;
 
 #[derive(Show)]
 pub struct Node {
+    pub parent: RefCell<Vec<Weak<Node>>>,
+
     // data common to all nodes:
-    pub children: Vec<Node>,
+    pub children: Vec<Rc<Node>>,
 
     // data specific to each node type:
     pub node_type: NodeType,
@@ -26,13 +32,13 @@ pub struct ElementData {
 }
 
 // Constructor functions for convenience:
-
-pub fn text(data: String) -> Node {
-    Node { children: vec![], node_type: NodeType::Text(data) }
+pub fn text(data: String) -> Rc<Node> {
+    Rc::new(Node { parent: RefCell::new(Vec::new()), children: vec![], node_type: NodeType::Text(data) })
 }
 
-pub fn elem(name: String, attrs: AttrMap, children: Vec<Node>) -> Node {
+pub fn elem(name: String, attrs: AttrMap, children: Vec<Rc<Node>>) -> Node {
     Node {
+        parent: RefCell::new(Vec::new()),
         children: children,
         node_type: NodeType::Element(ElementData {
             tag_name: name,
@@ -53,5 +59,24 @@ impl ElementData {
             Some(classlist) => classlist.as_slice().split(' ').collect(),
             None => HashSet::new()
         }
+    }
+}
+
+pub fn show(node: &Rc<Node>, depth: usize, parent: Option<Weak<Node>>) {
+    for i in range(0us, depth) {
+        print!("--");
+    }
+
+    match node.node_type {
+        NodeType::Element(ref data) => println!(" Element: {}", data.tag_name),
+        NodeType::Text(ref string) => println!(" Text: {}", string),
+    }
+
+    if let Some(unwrap_parent) = parent {
+        node.parent.borrow_mut().push(unwrap_parent);
+    }
+
+    for i in node.children.iter() {
+        show(i, depth + 1, Some(node.clone().downgrade()));
     }
 }

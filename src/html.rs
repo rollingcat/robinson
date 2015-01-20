@@ -12,16 +12,17 @@
 
 use dom;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Parse an HTML document and return the root element.
-pub fn parse(source: String) -> dom::Node {
+pub fn parse(source: String) -> Rc<dom::Node> {
     let mut nodes = Parser { pos: 0, input: source }.parse_nodes();
 
     // If the document contains a root element, just return it. Otherwise, create one.
     if nodes.len() == 1 {
         nodes.swap_remove(0)
     } else {
-        dom::elem("html".to_string(), HashMap::new(), nodes)
+        Rc::new(dom::elem("html".to_string(), HashMap::new(), nodes))
     }
 }
 
@@ -32,7 +33,7 @@ struct Parser {
 
 impl Parser {
     /// Parse a sequence of sibling nodes.
-    fn parse_nodes(&mut self) -> Vec<dom::Node> {
+    fn parse_nodes(&mut self) -> Vec<Rc<dom::Node>> {
         let mut nodes = vec!();
         loop {
             self.consume_whitespace();
@@ -45,7 +46,7 @@ impl Parser {
     }
 
     /// Parse a single node.
-    fn parse_node(&mut self) -> dom::Node {
+    fn parse_node(&mut self) -> Rc<dom::Node> {
         match self.next_char() {
             '<' => self.parse_element(),
             _   => self.parse_text()
@@ -53,7 +54,7 @@ impl Parser {
     }
 
     /// Parse a single element, including its open tag, contents, and closing tag.
-    fn parse_element(&mut self) -> dom::Node {
+    fn parse_element(&mut self) -> Rc<dom::Node> {
         self.consume_comment();
 
         // Opening tag.
@@ -63,10 +64,9 @@ impl Parser {
         assert!(self.consume_char() == '>');
 
         if self.is_self_closing_tag(tag_name.as_slice()) {
-            return dom::elem(tag_name, attrs, Vec::new());
+            return Rc::new(dom::elem(tag_name, attrs, Vec::new()));
         }
 
-        // Contents.
         let children = self.parse_nodes();
 
         // Closing tag.
@@ -75,7 +75,7 @@ impl Parser {
         assert!(self.parse_tag_name() == tag_name);
         assert!(self.consume_char() == '>');
 
-        return dom::elem(tag_name, attrs, children);
+        return Rc::new(dom::elem(tag_name, attrs, children));
     }
 
     /// Parse a tag or attribute name.
@@ -118,7 +118,7 @@ impl Parser {
     }
 
     /// Parse a text node.
-    fn parse_text(&mut self) -> dom::Node {
+    fn parse_text(&mut self) -> Rc<dom::Node> {
         dom::text(self.consume_while(|c| c != '<'))
     }
 

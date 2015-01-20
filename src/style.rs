@@ -6,13 +6,14 @@
 use dom::{Node, NodeType, ElementData};
 use css::{Stylesheet, Rule, Selector, SimpleSelector, Value, Specificity};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Map from CSS property names to values.
 pub type PropertyMap =  HashMap<String, Value>;
 
 /// A node with associated style data.
 pub struct StyledNode<'a> {
-    pub node: &'a Node,
+    pub node: &'a Rc<Node>,
     pub specified_values: PropertyMap,
     pub children: Vec<StyledNode<'a>>,
 }
@@ -54,7 +55,7 @@ impl<'a> StyledNode<'a> {
 ///
 /// This finds only the specified values at the moment. Eventually it should be extended to find the
 /// computed values too, including inherited values.
-pub fn style_tree<'a>(root: &'a Node, stylesheet: &'a Stylesheet) -> StyledNode<'a> {
+pub fn style_tree<'a>(root: &'a Rc<Node>, stylesheet: &'a Stylesheet) -> StyledNode<'a> {
     StyledNode {
         node: root,
         specified_values: match root.node_type {
@@ -104,7 +105,7 @@ fn match_rule<'a>(elem: &ElementData, rule: &'a Rule) -> Option<MatchedRule<'a>>
 fn matches(elem: &ElementData, selector: &Selector) -> bool {
     match *selector {
         Selector::Simple(ref simple_selector) => matches_simple_selector(elem, simple_selector),
-        Selector::Complex(ref complex_selector) => matches_complex_selector(elem, complex_selector)
+        Selector::Descendant(ref complex_selector) => matches_complex_selector(elem, complex_selector)
     }
 }
 
