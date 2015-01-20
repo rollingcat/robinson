@@ -62,7 +62,7 @@ impl ElementData {
     }
 }
 
-pub fn show(node: &Rc<Node>, depth: usize, parent: Option<Weak<Node>>) {
+pub fn show(node: &Rc<Node>, depth: usize) {
     for i in range(0us, depth) {
         print!("--");
     }
@@ -72,11 +72,7 @@ pub fn show(node: &Rc<Node>, depth: usize, parent: Option<Weak<Node>>) {
         NodeType::Text(ref string) => println!(" Text: {}", string),
     }
 
-    if let Some(unwrap_parent) = parent {
-        node.parent.borrow_mut().push(unwrap_parent);
-    }
-
     for i in node.children.iter() {
-        show(i, depth + 1, Some(node.clone().downgrade()));
+        show(i, depth + 1);
     }
 }

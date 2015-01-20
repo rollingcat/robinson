@@ -47,10 +47,16 @@ impl Parser {
 
     /// Parse a single node.
     fn parse_node(&mut self) -> Rc<dom::Node> {
-        match self.next_char() {
+        let node = match self.next_char() {
             '<' => self.parse_element(),
             _   => self.parse_text()
+        };
+
+        // set parent
+        for child in node.children.iter() {
+            child.parent.borrow_mut().push(node.clone().downgrade());
         }
+        return node;
     }
 
     /// Parse a single element, including its open tag, contents, and closing tag.
