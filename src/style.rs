@@ -7,13 +7,16 @@ use dom::{Node, NodeType, ElementData};
 use css::{Stylesheet, Rule, Selector, SimpleSelector, Value, Specificity};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::rc::Weak;
+
+use dom;
 
 /// Map from CSS property names to values.
 pub type PropertyMap =  HashMap<String, Value>;
 
 /// A node with associated style data.
 pub struct StyledNode<'a> {
-    pub node: &'a Rc<Node>,
+    pub node: Rc<Node>,
     pub specified_values: PropertyMap,
     pub children: Vec<StyledNode<'a>>,
 }
@@ -57,9 +60,9 @@ impl<'a> StyledNode<'a> {
 /// computed values too, including inherited values.
 pub fn style_tree<'a>(root: &'a Rc<Node>, stylesheet: &'a Stylesheet) -> StyledNode<'a> {
     StyledNode {
-        node: root,
+        node: root.clone(),
         specified_values: match root.node_type {
-            NodeType::Element(ref elem) => specified_values(elem, stylesheet),
+            NodeType::Element(ref elem) => specified_values(root.clone(), elem, stylesheet),
             NodeType::Text(_) => HashMap::new()
         },
         children: root.children.iter().map(|child| style_tree(child, stylesheet)).collect(),
@@ -69,9 +72,9 @@ pub fn style_tree<'a>(root: &'a Rc<Node>, stylesheet: &'a Stylesheet) -> StyledN
 /// Apply styles to a single element, returning the specified styles.
 ///
 /// To do: Allow multiple UA/author/user stylesheets, and implement the cascade.
-fn specified_values(elem: &ElementData, stylesheet: &Stylesheet) -> PropertyMap {
+fn specified_values(node: Rc<Node>, elem: &ElementData, stylesheet: &Stylesheet) -> PropertyMap {
     let mut values = HashMap::new();
-    let mut rules = matching_rules(elem, stylesheet);
+    let mut rules = matching_rules(node, elem, stylesheet);
 
     // Go through the rules from lowest to highest specificity.
     rules.sort_by(|&(a, _), &(b, _)| a.cmp(&b));
@@ -87,25 +90,25 @@ fn specified_values(elem: &ElementData, stylesheet: &Stylesheet) -> PropertyMap 
 type MatchedRule<'a> = (Specificity, &'a Rule);
 
 /// Find all CSS rules that match the given element.
-fn matching_rules<'a>(elem: &ElementData, stylesheet: &'a Stylesheet) -> Vec<MatchedRule<'a>> {
+fn matching_rules<'a>(node: Rc<Node>, elem: &ElementData, stylesheet: &'a Stylesheet) -> Vec<MatchedRule<'a>> {
     // For now, we just do a linear scan of all the rules.  For large
     // documents, it would be more efficient to store the rules in hash tables
     // based on tag name, id, class, etc.
-    stylesheet.rules.iter().filter_map(|rule| match_rule(elem, rule)).collect()
+    stylesheet.rules.iter().filter_map(|rule| match_rule(node.clone(), elem, rule)).collect()
 }
 
 /// If `rule` matches `elem`, return a `MatchedRule`. Otherwise return `None`.
-fn match_rule<'a>(elem: &ElementData, rule: &'a Rule) -> Option<MatchedRule<'a>> {
+fn match_rule<'a>(node: Rc<Node>, elem: &ElementData, rule: &'a Rule) -> Option<MatchedRule<'a>> {
     // Find the first (most specific) matching selector.
-    rule.selectors.iter().find(|selector| matches(elem, *selector))
+    rule.selectors.iter().find(|selector| matches(node.clone(), elem, *selector))
         .map(|selector| (selector.specificity(), rule))
 }
 
 /// Selector matching:
-fn matches(elem: &ElementData, selector: &Selector) -> bool {
+fn matches(node: Rc<Node>, elem: &ElementData, selector: &Selector) -> bool {
     match *selector {
         Selector::Simple(ref simple_selector) => matches_simple_selector(elem, simple_selector),
-        Selector::Descendant(ref complex_selector) => matches_complex_selector(elem, complex_selector)
+        Selector::Descendant(ref descendant_selector) => matches_descendant_selector(node, elem, descendant_selector.as_slice())
     }
 }
 
@@ -130,11 +133,50 @@ fn matches_simple_selector(elem: &ElementData, selector: &SimpleSelector) -> boo
     return true;
 }
 
-fn matches_complex_selector(elem: &ElementData, selector: &Vec<SimpleSelector>) -> bool {
-    for i in selector.iter() {
-        if matches_simple_selector(elem, i) {
-            return true;
+fn matches_descendant_selector(node: Rc<Node>, elem: &ElementData, selector: &[SimpleSelector]) -> bool {
+    assert!(selector.len() > 1);
+
+    if !matches_simple_selector(elem, selector.last().unwrap()) {
+        return false;
+    }
+
+    let current_selector = selector.slice(0, selector.len() - 1);
+    return matches_ancester(node, current_selector);
+}
+
+fn matches_ancestor(node: Rc<Node>, selector: &[SimpleSelector]) -> bool {
+    let mut current_node = node;
+    let mut matching_node: Option<Rc<Node>> = None;
+    loop {
+        match get_parent(&current_node) {
+            Some(parent_node) => {
+                if let NodeType::Element(ref parent_elem) = parent_node.node_type {
+                    if matches_simple_selector(parent_elem, selector.last().unwrap()) {
+                        matching_node = Some(parent_node.clone());
+                        break;
+                    }
+                    current_node = parent_node.clone();
+                }
+            },
+            None => break,
         }
     }
-    return false;
+
+    match matching_node {
+        Some(_) => if selector.len() == 1 {
+            println!("Match Descendant selector!!!");
+            dom::show(&matching_node.unwrap());
+            return true
+        },
+        None => return false,
+    }
+
+    return matches_ancester(matching_node.unwrap(), selector.slice(0, selector.len() - 1));
+}
+
+fn get_parent(node: &Rc<Node>) -> Option<Rc<Node>> {
+    if node.parent.borrow().is_empty() {
+        return None;
+    }
+    node.parent.borrow().last().unwrap().upgrade()
 }

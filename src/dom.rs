@@ -62,17 +62,30 @@ impl ElementData {
     }
 }
 
-pub fn show(node: &Rc<Node>, depth: usize) {
+pub fn show_all(node: &Rc<Node>, depth: usize) {
     for i in range(0us, depth) {
         print!("--");
     }
 
-    match node.node_type {
-        NodeType::Element(ref data) => println!(" Element: {}", data.tag_name),
-        NodeType::Text(ref string) => println!(" Text: {}", string),
-    }
+    show(node);
 
     for i in node.children.iter() {
-        show(i, depth + 1);
+        show_all(i, depth + 1);
+    }
+}
+
+pub fn show(node: &Rc<Node>) {
+    match node.node_type {
+        NodeType::Element(ref data) => print!(" Element: {}", data.tag_name),
+        NodeType::Text(ref string) => print!(" Text: {}", string),
+    }
+
+    if node.parent.borrow().is_empty() {
+        println!(" -> No parent");
+    } else {
+        match node.parent.borrow().last().unwrap().upgrade().unwrap().node_type {
+            NodeType::Element(ref data) => println!(" -> parent: {}", data.tag_name),
+            NodeType::Text(ref string) => println!(" -> parent: {}", string),
+        }
     }
 }
