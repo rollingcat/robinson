@@ -6,6 +6,7 @@
 use std::ascii::OwnedAsciiExt; // for `into_ascii_lowercase`
 use std::str::FromStr;
 use std::num::FromStrRadix;
+use std::cmp::min;
 
 // Data structures:
 
@@ -68,6 +69,9 @@ impl Copy for Color {}
 pub type Specificity = (usize, usize, usize);
 
 static FONT_SIZE: f32 = 10.0f32;
+static SHORTHAND: [&'static str; 2] = ["border", "margin"];
+static MARGIN_PROPERTIES: [&'static str; 4] = ["margin-top", "margin-bottom", "margin-left", "margin-right"];
+static MARGIN_ORDER: [[usize; 4]; 4] = [[0, 0, 0, 0], [0, 0, 1, 1], [0, 2, 1, 1], [0, 2, 3, 1]];
 
 impl Selector {
     pub fn specificity(&self) -> Specificity {
@@ -214,28 +218,41 @@ impl Parser {
                 self.consume_char();
                 break;
             }
-            declarations.push(self.parse_declaration());
+            for decl in self.parse_declaration().into_iter() {
+                declarations.push(decl);
+            }
         }
         return declarations;
     }
 
     /// Parse one `<property>: <value>;` declaration.
-    fn parse_declaration(&mut self) -> Declaration {
+    fn parse_declaration(&mut self) -> Vec<Declaration> {
         self.consume_comment();
 
         let property_name = self.parse_identifier();
         self.consume_whitespace();
         assert!(self.consume_char() == ':');
         self.consume_whitespace();
-        let value = self.parse_value();
-        // let value = Value::Keyword(self.parse_value_to_string());
-        self.consume_whitespace();
-        assert!(self.consume_char() == ';');
 
-        Declaration {
-            name: property_name,
-            value: value,
+        let mut declarations = Vec::new();
+        if is_shorthand(property_name.as_slice()) {
+            declarations = parse_shorthand(property_name.as_slice(), self.parse_values());
+        } else {
+            let value = self.parse_value();
+            self.consume_whitespace();
+            declarations.push(Declaration { name: property_name, value: value });
         }
+        assert!(self.consume_char() == ';');
+        declarations
+    }
+
+    fn parse_values(&mut self) -> Vec<Value> {
+        let mut values = Vec::new();
+        while self.next_char() != ';' {
+            values.push(self.parse_value());
+            self.consume_whitespace();
+        }
+        values
     }
 
     // Methods for parsing values:
@@ -347,4 +364,39 @@ fn valid_identifier_char(c: char) -> bool {
         'a'...'z' | 'A'...'Z' | '0'...'9' | '-' | '_' | '%' => true, // TODO: Include U+00A0 and higher.
         _ => false,
     }
+}
+
+fn is_shorthand(name: &str) -> bool {
+    SHORTHAND.contains(&name)
+}
+
+fn parse_shorthand(name: &str, values: Vec<Value>) -> Vec<Declaration> {
+    match name {
+        "border" => parse_border_shorthand(values),
+        "margin" => parse_margin_shorthand(values),
+        _ => panic!("Not shorthand"),
+    }
+}
+
+fn parse_border_shorthand(values: Vec<Value>) -> Vec<Declaration> {
+    let mut declaration = Vec::new();
+    for val in values.into_iter() {
+        let decl_name = match val {
+            Value::Length(_, _) => "border-width",
+            Value::Keyword(_) => "border-style",
+            Value::ColorValue(_) => "border-color",
+        };
+        declaration.push(Declaration { name: decl_name.to_string(), value: val });
+    }
+    return declaration;
+}
+
+fn parse_margin_shorthand(values: Vec<Value>) -> Vec<Declaration> {
+    assert!(!values.is_empty());
+    let idx = MARGIN_ORDER[min(4, values.len()) - 1];
+    let mut declarations = Vec::new();
+    for i in range(0, 4) {
+        declarations.push(Declaration { name: MARGIN_PROPERTIES[i].to_string(), value: values[idx[i]].clone()});
+    }
+    return declarations;
 }
