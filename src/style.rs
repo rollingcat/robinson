@@ -186,8 +186,10 @@ pub fn show(style_node: &StyledNode, depth: usize) {
     dom::show(&style_node.node);
 
     for (key, value) in style_node.specified_values.iter() {
-        if let Value::Keyword(ref value_string) = *value {
-            println!("{}: {}", key, value_string)
+        match *value {
+            Value::Keyword(ref value_string) => println!("{}: {}", key, value_string),
+            Value::Length(ref len, _) => println!("{}: {}px", key, len),
+            Value::ColorValue(ref col) => println!("{}: {} {} {}", key, col.r, col.g, col.b),
         }
     }
 
