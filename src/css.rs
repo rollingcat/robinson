@@ -51,6 +51,8 @@ pub enum Value {
 #[derive(Show, Clone, PartialEq)]
 pub enum Unit {
     Px,
+    Em,
+    Percent,
 }
 
 #[derive(Show, Clone, PartialEq, Default)]
@@ -64,6 +66,8 @@ pub struct Color {
 impl Copy for Color {}
 
 pub type Specificity = (usize, usize, usize);
+
+static FONT_SIZE: f32 = 10.0f32;
 
 impl Selector {
     pub fn specificity(&self) -> Specificity {
@@ -93,6 +97,7 @@ impl Value {
     pub fn to_px(&self) -> f32 {
         match *self {
             Value::Length(f, Unit::Px) => f,
+            Value::Length(f, Unit::Em) => f * FONT_SIZE,
             _ => 0.0
         }
     }
@@ -222,8 +227,8 @@ impl Parser {
         self.consume_whitespace();
         assert!(self.consume_char() == ':');
         self.consume_whitespace();
-        // let value = self.parse_value();
-        let value = Value::Keyword(self.parse_value_to_string());
+        let value = self.parse_value();
+        // let value = Value::Keyword(self.parse_value_to_string());
         self.consume_whitespace();
         assert!(self.consume_char() == ';');
 
@@ -237,7 +242,7 @@ impl Parser {
 
     fn parse_value(&mut self) -> Value {
         match self.next_char() {
-            '0'...'9' => self.parse_length(),
+            '0'...'9' | '.' => self.parse_length(),
             '#' => self.parse_color(),
             _ => Value::Keyword(self.parse_identifier())
         }
@@ -262,7 +267,9 @@ impl Parser {
 
     fn parse_unit(&mut self) -> Unit {
         match &*self.parse_identifier().into_ascii_lowercase() {
-            "px" => Unit::Px,
+            "px" | "" => Unit::Px,
+            "em" => Unit::Em,
+            "%" => Unit::Percent,
             _ => panic!("unrecognized unit")
         }
     }
@@ -337,7 +344,7 @@ impl Parser {
 
 fn valid_identifier_char(c: char) -> bool {
     match c {
-        'a'...'z' | 'A'...'Z' | '0'...'9' | '-' | '_' => true, // TODO: Include U+00A0 and higher.
+        'a'...'z' | 'A'...'Z' | '0'...'9' | '-' | '_' | '%' => true, // TODO: Include U+00A0 and higher.
         _ => false,
     }
 }

@@ -188,7 +188,14 @@ pub fn show(style_node: &StyledNode, depth: usize) {
     for (key, value) in style_node.specified_values.iter() {
         match *value {
             Value::Keyword(ref value_string) => println!("{}: {}", key, value_string),
-            Value::Length(ref len, _) => println!("{}: {}px", key, len),
+            Value::Length(ref len, ref unit) => {
+                let unit_string = match unit {
+                    &css::Unit::Px => "px",
+                    &css::Unit::Em => "em",
+                    &css::Unit::Percent => "%",
+                };
+                println!("{}: {}{}", key, len, unit_string);
+            }
             Value::ColorValue(ref col) => println!("{}: {} {} {}", key, col.r, col.g, col.b),
         }
     }
