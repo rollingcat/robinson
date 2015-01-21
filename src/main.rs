@@ -7,6 +7,7 @@ use getopts::{optopt,getopts};
 use std::default::Default;
 use std::io::fs::File;
 use std::os::args;
+use std::rc::Rc;
 
 mod css;
 mod dom;
@@ -36,7 +37,6 @@ fn main() {
         File::open(&Path::new(path)).read_to_string().unwrap()
     };
     let html = read_source(matches.opt_str("h"), "examples/test.html");
-    let css  = read_source(matches.opt_str("c"), "examples/test.css");
 
     // Since we don't have an actual window, hard-code the "viewport" size.
     let initial_containing_block = layout::Dimensions {
@@ -48,8 +48,12 @@ fn main() {
 
     // Parsing and rendering:
     let root_node = html::parse(html);
-    let stylesheet = css::parse(css);
+    // dom::show_all(&root_node, 1);
+    let css_string = dom::find_style(&root_node);
+    let stylesheet = css::parse(css_string);
+    // css::show(stylesheet);
     let style_root = style::style_tree(&root_node, &stylesheet);
+    style::show(&style_root, 1);
     let layout_root = layout::layout_tree(&style_root, initial_containing_block);
     let canvas = painting::paint(&layout_root, initial_containing_block.content);
 

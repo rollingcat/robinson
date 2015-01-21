@@ -62,6 +62,29 @@ impl ElementData {
     }
 }
 
+pub fn find_style(node: &Rc<Node>) -> String {
+    let mut style_string = String::new();
+
+    if let NodeType::Element(ref data) = node.node_type {
+        if data.tag_name == "style" {
+            for child in node.children.iter() {
+                if let NodeType::Text(ref text) = child.node_type {
+                    return text.clone();
+                }
+            }
+        }
+    }
+
+    for child in node.children.iter() {
+        style_string = find_style(child);
+        if !style_string.is_empty() {
+            return style_string;
+        }
+    }
+
+    style_string
+}
+
 pub fn show_all(node: &Rc<Node>, depth: usize) {
     for i in range(0us, depth) {
         print!("--");
