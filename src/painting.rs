@@ -1,7 +1,8 @@
 use layout::{AnonymousBlock, BlockNode, InlineNode, LayoutBox, Rect};
-use css::{Value, Color};
+use css::{Value};
 use std::iter::{repeat, range};
 use std::num::Float;
+use color::{Color};
 
 pub struct Canvas {
     pub pixels: Vec<Color>,

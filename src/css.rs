@@ -7,6 +7,7 @@ use std::ascii::OwnedAsciiExt; // for `into_ascii_lowercase`
 use std::str::FromStr;
 use std::num::FromStrRadix;
 use std::cmp::min;
+use color::{Color, ColorMap};
 
 // Data structures:
 
@@ -56,16 +57,6 @@ pub enum Unit {
     Percent,
 }
 
-#[derive(Show, Clone, PartialEq, Default)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8,
-}
-
-impl Copy for Color {}
-
 pub type Specificity = (usize, usize, usize);
 
 static FONT_SIZE: f32 = 10.0f32;
@@ -109,13 +100,14 @@ impl Value {
 
 /// Parse a whole CSS stylesheet.
 pub fn parse(source: String) -> Stylesheet {
-    let mut parser = Parser { pos: 0, input: source };
+    let mut parser = Parser { pos: 0, input: source, color_map: ColorMap::new() };
     Stylesheet { rules: parser.parse_rules() }
 }
 
 struct Parser {
     pos: usize,
     input: String,
+    color_map: ColorMap,
 }
 
 impl Parser {
@@ -200,7 +192,7 @@ impl Parser {
                     self.consume_char();
                 }
                 c if valid_identifier_char(c) => {
-                    selector.tag_name = Some(self.parse_identifier());
+                    selector.tag_name = Some(self.parse_identifier().into_ascii_lowercase());
                 }
                 _ => break
             }
@@ -261,7 +253,13 @@ impl Parser {
         match self.next_char() {
             '0'...'9' | '.' => self.parse_length(),
             '#' => self.parse_color(),
-            _ => Value::Keyword(self.parse_identifier())
+            _ => {
+                let value = self.parse_identifier();
+                match self.color_map.get_color(value.as_slice()) {
+                    Some(color) => Value::ColorValue(*color),
+                    None => Value::Keyword(value),
+                }
+            }
         }
     }
 
