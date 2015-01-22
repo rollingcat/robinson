@@ -309,3 +309,30 @@ impl Dimensions {
         self.border_box().expanded_by(self.margin)
     }
 }
+
+pub fn show(node: &LayoutBox, depth: usize) {
+    let mut info = String::new();
+
+    for i in range(0us, depth) {
+        info.push_str("--");
+    }
+
+    let box_type_str = match node.box_type {
+        BlockNode(node) => { add_tag_name(&mut info, node); "BlockNode" },
+        InlineNode(node) => { add_tag_name(&mut info, node); "InlineNode" },
+        AnonymousBlock => "AnonymousBlock",
+    };
+    info.push_str(box_type_str);
+
+    println!("{} : {:?}", info, node.dimensions.content);
+
+    for i in node.children.iter() {
+        show(i, depth+1);
+    }
+}
+
+fn add_tag_name(info: &mut String, node: &StyledNode) {
+    info.push('<');
+    info.push_str(node.tag_name().as_slice());
+    info.push('>'); info.push(' ');
+}
