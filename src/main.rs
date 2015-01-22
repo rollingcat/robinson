@@ -15,6 +15,8 @@ mod html;
 mod layout;
 mod style;
 mod painting;
+mod color;
+mod shorthand;
 
 fn main() {
     // Parse command-line options:
