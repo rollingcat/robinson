@@ -237,6 +237,7 @@ impl Parser {
             declarations.push(Declaration { name: property_name, value: value });
         }
         assert!(self.consume_char() == ';');
+        self.consume_comment();
         declarations
     }
 
@@ -349,6 +350,7 @@ impl Parser {
     }
 
     fn consume_comment(&mut self) {
+        self.consume_whitespace();
         while self.starts_with("/*") {
             assert!(self.consume_char() == '/');
             assert!(self.consume_char() == '*');
