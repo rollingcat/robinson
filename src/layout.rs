@@ -262,7 +262,7 @@ impl<'a> LayoutBox<'a> {
         // If the height is set to an explicit length, use that exact length.
         // Otherwise, just keep the value set by `layout_block_children`.
         match self.get_style_node().value("height") {
-            Some(Length(h, Px)) => { self.dimensions.content.height = h; }
+            Some(value) => { self.dimensions.content.height = value.to_px(); }
             _ => {}
         }
     }
