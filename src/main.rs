@@ -55,9 +55,11 @@ fn main() {
     let stylesheet = css::parse(css_string);
     // css::show(stylesheet);
     let style_root = style::style_tree(&root_node, &stylesheet);
-    style::show(&style_root, 1);
+    // style::show(&style_root, 1);
     let layout_root = layout::layout_tree(&style_root, initial_containing_block);
-    let canvas = painting::paint(&layout_root, initial_containing_block.content);
+    layout::show(&layout_root, 1);
+
+    let canvas = painting::paint(&layout_root, initial_containing_block.content, style_root.background_color());
 
     // Create the output file:
     let filename = matches.opt_str("o").unwrap_or("output.png".to_string());

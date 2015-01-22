@@ -11,9 +11,9 @@ pub struct Canvas {
 }
 
 /// Paint a tree of LayoutBoxes to an array of pixels.
-pub fn paint(layout_root: &LayoutBox, bounds: Rect) -> Canvas {
+pub fn paint(layout_root: &LayoutBox, bounds: Rect, background_color: Color) -> Canvas {
     let display_list = build_display_list(layout_root);
-    let mut canvas = Canvas::new(bounds.width as usize, bounds.height as usize);
+    let mut canvas = Canvas::new(bounds.width as usize, bounds.height as usize, background_color);
     for item in display_list.iter() {
         canvas.paint_item(item);
     }
@@ -101,10 +101,9 @@ fn get_color(layout_box: &LayoutBox, name: &str) -> Option<Color> {
 
 impl Canvas {
     /// Create a blank canvas
-    fn new(width: usize, height: usize) -> Canvas {
-        let white = Color { r: 255, g: 255, b: 255, a: 255 };
+    fn new(width: usize, height: usize, background_color: Color) -> Canvas {
         return Canvas {
-            pixels: repeat(white).take(width * height).collect(),
+            pixels: repeat(background_color).take(width * height).collect(),
             width: width,
             height: height,
         }

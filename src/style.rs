@@ -11,6 +11,7 @@ use std::rc::Weak;
 
 use dom;
 use css;
+use color::{Color};
 
 /// Map from CSS property names to values.
 pub type PropertyMap =  HashMap<String, Value>;
@@ -50,7 +51,26 @@ impl<'a> StyledNode<'a> {
                 "none" => Display::None,
                 _ => Display::Inline
             },
-            _ => Display::Inline
+            _ => Display::Block
+        }
+    }
+
+    pub fn background_color(&self) -> Color {
+        assert!(self.tag_name() == "html");
+        if let Some(Value::ColorValue(color)) = self.value("background-color") {
+            return color;
+        }
+        Color { r: 255, g: 255, b: 255, a: 255 }
+    }
+
+    pub fn tag_name(&self) -> String {
+        match self.node.node_type {
+            NodeType::Element(ref data) => data.tag_name.clone(),
+            NodeType::Text(ref string) => {
+                let mut text = "text: ".to_string();
+                text.push_str(string.slice(0, 3));
+                text
+            }
         }
     }
 }
