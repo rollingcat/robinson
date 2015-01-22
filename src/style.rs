@@ -84,6 +84,8 @@ fn specified_values(node: Rc<Node>, elem: &ElementData, stylesheet: &Stylesheet)
             values.insert(declaration.name.clone(), declaration.value.clone());
         }
     }
+
+    apply_inline_style(&mut values, elem);
     return values;
 }
 
@@ -180,6 +182,25 @@ fn get_parent(node: &Rc<Node>) -> Option<Rc<Node>> {
         return None;
     }
     node.parent.borrow().last().unwrap().upgrade()
+}
+
+fn apply_inline_style(values: &mut PropertyMap, elem: &ElementData) {
+    if let Some(style_string) = elem.attributes.get("style") {
+        let mut last_idx;
+        let mut source = style_string.clone();
+        if source.char_at(source.len() - 1) != ';' {
+            last_idx = source.len();
+            source.insert(last_idx, ';');
+        }
+        // insert {}
+        source.insert(0, '{');
+        last_idx = source.len();
+        source.insert(last_idx, '}');
+
+        for decl in css::parse_inline_style(source).into_iter() {
+            values.insert(decl.name, decl.value);
+        }
+    }
 }
 
 pub fn show(style_node: &StyledNode, depth: usize) {

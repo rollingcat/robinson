@@ -101,6 +101,11 @@ pub fn parse(source: String) -> Stylesheet {
     Stylesheet { rules: parser.parse_rules() }
 }
 
+pub fn parse_inline_style(source: String) -> Vec<Declaration> {
+    let mut parser = Parser { pos: 0, input: source, color_map: ColorMap::new() };
+    parser.parse_declarations()
+}
+
 struct Parser {
     pos: usize,
     input: String,
