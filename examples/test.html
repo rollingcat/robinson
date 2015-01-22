@@ -1,13 +1,66 @@
-<html>
-  <head>
-    <title>Test</title>
-  </head>
-  <div class="outer">
-    <p class="inner">
-      Hello, <span id="name">world!</span>
-    </p>
-    <p class="inner" id="bye">
-      Goodbye!
-    </p>
-  </div>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
+<html lang="en">
+<head>
+<style>
+    html {
+        font-size: 10px;
+        background-color: blue;
+        color: white;
+    }
+
+    body {
+        margin: 1.5em;
+        border: .5em solid black;
+        padding: 0;
+        width: 48em;
+        height: 48em;
+        background-color: white;
+    }
+    dl {
+        margin: 0;
+        border: 0;
+        padding: .5em;
+    }
+    dt {
+        background-color: red;
+        margin: 0;
+        padding: 1em;
+        width: 10px; /* refers to parent element's width of 47em. = 5em or 50px */
+        height: 7em; /* 28em;*/
+        border: .5em solid black;
+        float: left;
+    }
+    dd {
+        float: right;
+        margin: 0 0 0 1em;
+        border: 1em solid green;
+        padding: 1em;
+        width: 34em;
+        height: 6em; /* 27em; */
+    }
+    div {
+        width: 60px;
+        height: 30px;
+        margin: 10px;
+        border: 3px solid blue;
+        background-color: green;
+    }
+</style>
+</head>
+<body>
+    <dl>
+        <div></div>
+        <div></div>
+
+        <dt>
+        </dt>
+
+        <div></div>
+        <div></div>
+
+        <dd>
+        </dd>
+    </dl>
+</body>
 </html>
