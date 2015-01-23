@@ -55,7 +55,7 @@ fn main() {
     let stylesheet = css::parse(css_string);
     // css::show(stylesheet);
     let style_root = style::style_tree(&root_node, &stylesheet);
-    // style::show(&style_root, 1);
+    style::show(&style_root, 1);
     let layout_root = layout::layout_tree(&style_root, initial_containing_block);
     layout::show(&layout_root, 1);
 

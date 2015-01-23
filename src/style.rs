@@ -30,6 +30,12 @@ pub enum Display {
     None,
 }
 
+#[derive(PartialEq)]
+pub enum Float {
+    FloatLeft,
+    FloatRight,
+}
+
 impl<'a> StyledNode<'a> {
     /// Return the specified value of a property if it exists, otherwise `None`.
     pub fn value(&self, name: &str) -> Option<Value> {
@@ -52,6 +58,17 @@ impl<'a> StyledNode<'a> {
                 _ => Display::Inline
             },
             _ => Display::Block
+        }
+    }
+
+    pub fn float_value(&self) -> Option<Float> {
+        match self.value("float") {
+            Some(Value::Keyword(s)) => match s.as_slice() {
+                "left" => Some(Float::FloatLeft),
+                "right" => Some(Float::FloatRight),
+                _ => panic!("Wrong float value"),
+            },
+            _ => None
         }
     }
 

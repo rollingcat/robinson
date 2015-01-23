@@ -1,4 +1,4 @@
-use layout::{AnonymousBlock, BlockNode, InlineNode, LayoutBox, Rect};
+use layout::{AnonymousBlock, BlockNode, InlineNode, FloatNode, LayoutBox, Rect};
 use css::{Value};
 use std::iter::{repeat, range};
 use std::num::Float;
@@ -91,7 +91,7 @@ fn render_borders(list: &mut DisplayList, layout_box: &LayoutBox) {
 /// Return the specified color for CSS property `name`, or None if no color was specified.
 fn get_color(layout_box: &LayoutBox, name: &str) -> Option<Color> {
     match layout_box.box_type {
-        BlockNode(style) | InlineNode(style) => match style.value(name) {
+        BlockNode(style) | InlineNode(style) | FloatNode(style) => match style.value(name) {
             Some(Value::ColorValue(color)) => Some(color),
             _ => None
         },

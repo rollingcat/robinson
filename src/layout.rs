@@ -1,12 +1,12 @@
 ///! Basic CSS block layout.
 
-use style::{StyledNode, Display};
+use style::{StyledNode, Display, Float};
 use css::Value::{Keyword, Length};
 use css::Unit::Px;
 use std::default::Default;
 use std::iter::AdditiveIterator; // for `sum`
 
-pub use self::BoxType::{AnonymousBlock, InlineNode, BlockNode};
+pub use self::BoxType::{AnonymousBlock, InlineNode, BlockNode, FloatNode};
 
 // CSS box model. All sizes are in px.
 
@@ -50,6 +50,7 @@ pub struct LayoutBox<'a> {
 pub enum BoxType<'a> {
     BlockNode(&'a StyledNode<'a>),
     InlineNode(&'a StyledNode<'a>),
+    FloatNode(&'a StyledNode<'a>),
     AnonymousBlock,
 }
 
@@ -66,6 +67,7 @@ impl<'a> LayoutBox<'a> {
         match self.box_type {
             BlockNode(node) => node,
             InlineNode(node) => node,
+            FloatNode(node) => node,
             AnonymousBlock => panic!("Anonymous block box has no style node")
         }
     }
@@ -85,11 +87,7 @@ pub fn layout_tree<'a>(node: &'a StyledNode<'a>, mut containing_block: Dimension
 /// Build the tree of LayoutBoxes, but don't perform any layout calculations yet.
 fn build_layout_tree<'a>(style_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
     // Create the root box.
-    let mut root = LayoutBox::new(match style_node.display() {
-        Display::Block => BlockNode(style_node),
-        Display::Inline => InlineNode(style_node),
-        Display::None => panic!("Root node has display: none.")
-    });
+    let mut root = create_layout_box(style_node);
 
     // Create the descendant boxes.
     for child in style_node.children.iter() {
@@ -102,12 +100,25 @@ fn build_layout_tree<'a>(style_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
     return root;
 }
 
+fn create_layout_box<'a>(style_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
+    if let Some(_) = style_node.value("float") {
+        return LayoutBox::new(FloatNode(style_node));
+    }
+
+    LayoutBox::new(match style_node.display() {
+        Display::Block => BlockNode(style_node),
+        Display::Inline => InlineNode(style_node),
+        Display::None => panic!("Root node has display: none.")
+    })
+}
+
 impl<'a> LayoutBox<'a> {
     /// Lay out a box and its descendants.
     fn layout(&mut self, containing_block: Dimensions) {
         match self.box_type {
             BlockNode(_) => self.layout_block(containing_block),
             InlineNode(_) => {} // TODO
+            FloatNode(_) => self.layout_float(containing_block, &Default::default()),
             AnonymousBlock => {} // TODO
         }
     }
@@ -126,6 +137,16 @@ impl<'a> LayoutBox<'a> {
 
         // Parent height can depend on child height, so `calculate_height` must be called after the
         // children are laid out.
+        self.calculate_block_height();
+    }
+
+    fn layout_float(&mut self, containing_block: Dimensions, previous_block: &Dimensions) {
+        self.calculate_float_width(containing_block);
+
+        self.calculate_float_position(containing_block, previous_block);
+
+        self.layout_block_children();
+
         self.calculate_block_height();
     }
 
@@ -216,6 +237,45 @@ impl<'a> LayoutBox<'a> {
         d.margin.right = margin_right.to_px();
     }
 
+    fn calculate_float_width(&mut self, containing_block: Dimensions) {
+        let style = self.get_style_node();
+
+        // `width` has initial value `auto`.
+        let auto = Keyword("auto".to_string());
+        let mut width = style.value("width").unwrap_or(auto.clone());
+
+        // margin, border, and padding have initial value 0.
+        let zero = Length(0.0, Px);
+
+        let mut margin_left = style.lookup("margin-left", "margin", &zero);
+        let mut margin_right = style.lookup("margin-right", "margin", &zero);
+
+        let border_left = style.lookup("border-left-width", "border-width", &zero);
+        let border_right = style.lookup("border-right-width", "border-width", &zero);
+
+        let padding_left = style.lookup("padding-left", "padding", &zero);
+        let padding_right = style.lookup("padding-right", "padding", &zero);
+
+        let total = [&margin_left, &margin_right, &border_left, &border_right,
+                     &padding_left, &padding_right, &width].iter().map(|v| v.to_px()).sum();
+
+        let d = &mut self.dimensions;
+        d.content.width = width.to_px();
+
+        d.padding.left = padding_left.to_px();
+        d.padding.right = padding_right.to_px();
+
+        d.border.left = border_left.to_px();
+        d.border.right = border_right.to_px();
+
+        d.margin.left = margin_left.to_px();
+        d.margin.right = margin_right.to_px();
+
+        println!("w:{} / padding:{} {} / border:{} {} / margin:{} {}",
+            d.content.width, d.padding.left, d.padding.right,
+            d.border.left, d.border.right, d.margin.left, d.margin.right);
+    }
+
     /// Finish calculating the block's edge sizes, and position it within its containing block.
     ///
     /// http://www.w3.org/TR/CSS2/visudet.html#normal-block
@@ -245,15 +305,61 @@ impl<'a> LayoutBox<'a> {
                       d.margin.top + d.border.top + d.padding.top;
     }
 
+    fn calculate_float_position(&mut self, containing_block: Dimensions, previous_block: &Dimensions) {
+        let style = self.get_style_node();
+        let d = &mut self.dimensions;
+
+        // margin, border, and padding have initial value 0.
+        let zero = Length(0.0, Px);
+
+        // If margin-top or margin-bottom is `auto`, the used value is zero.
+        d.margin.top = style.lookup("margin-top", "margin", &zero).to_px();
+        d.margin.bottom = style.lookup("margin-bottom", "margin", &zero).to_px();
+
+        d.border.top = style.lookup("border-top-width", "border-width", &zero).to_px();
+        d.border.bottom = style.lookup("border-bottom-width", "border-width", &zero).to_px();
+
+        d.padding.top = style.lookup("padding-top", "padding", &zero).to_px();
+        d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_px();
+
+        let float_direction = match self.box_type {
+            FloatNode(node) => node.float_value(),
+            _ => None,
+        };
+        assert!(float_direction != None);
+
+        match float_direction.unwrap() {
+            Float::FloatLeft => {
+                d.content.x =
+                containing_block.content.x + d.margin.left + d.border.left + d.padding.left;
+            },
+            Float::FloatRight => {
+                let self_width_right = d.content.width + d.margin.right + d.border.right + d.padding.right;
+                d.content.x =
+                containing_block.content.x + containing_block.content.width - self_width_right;
+            },
+        }
+
+        d.content.y = previous_block.margin_box().y + previous_block.margin_box().height +
+                      d.margin.top + d.border.top + d.padding.top;
+    }
+
     /// Lay out the block's children within its content area.
     ///
     /// Sets `self.dimensions.height` to the total content height.
     fn layout_block_children(&mut self) {
         let d = &mut self.dimensions;
+        let mut prev_dimension: &Dimensions = &Default::default();
+
         for child in self.children.iter_mut() {
-            child.layout(*d);
-            // Increment the height so each child is laid out below the previous one.
-            d.content.height = d.content.height + child.dimensions.margin_box().height;
+            if let FloatNode(_) = child.box_type {
+                child.layout_float(*d, prev_dimension);
+            } else {
+                child.layout(*d);
+                // Increment the height so each child is laid out below the previous one.
+                d.content.height = d.content.height + child.dimensions.margin_box().height;
+            }
+            prev_dimension = &child.dimensions;
         }
     }
 
@@ -271,7 +377,7 @@ impl<'a> LayoutBox<'a> {
     fn get_inline_container(&mut self) -> &mut LayoutBox<'a> {
         match self.box_type {
             InlineNode(_) | AnonymousBlock => self,
-            BlockNode(_) => {
+            BlockNode(_) | FloatNode(_) => {
                 // If we've just generated an anonymous block box, keep using it.
                 // Otherwise, create a new one.
                 match self.children.last() {
@@ -320,6 +426,7 @@ pub fn show(node: &LayoutBox, depth: usize) {
     let box_type_str = match node.box_type {
         BlockNode(node) => { add_tag_name(&mut info, node); "BlockNode" },
         InlineNode(node) => { add_tag_name(&mut info, node); "InlineNode" },
+        FloatNode(node) => { add_tag_name(&mut info, node); "FloatNode" },
         AnonymousBlock => "AnonymousBlock",
     };
     info.push_str(box_type_str);
