@@ -118,7 +118,7 @@ impl<'a> LayoutBox<'a> {
         match self.box_type {
             BlockNode(_) => self.layout_block(containing_block),
             InlineNode(_) => {} // TODO
-            FloatNode(_) => self.layout_float(containing_block, &Default::default()),
+            FloatNode(_) => self.layout_float(containing_block, 0f32),
             AnonymousBlock => {} // TODO
         }
     }
@@ -140,10 +140,10 @@ impl<'a> LayoutBox<'a> {
         self.calculate_block_height();
     }
 
-    fn layout_float(&mut self, containing_block: Dimensions, previous_block: &Dimensions) {
+    fn layout_float(&mut self, containing_block: Dimensions, previous_width: f32) {
         self.calculate_float_width(containing_block);
 
-        self.calculate_float_position(containing_block, previous_block);
+        self.calculate_float_position(containing_block, previous_width);
 
         self.layout_block_children();
 
@@ -305,7 +305,7 @@ impl<'a> LayoutBox<'a> {
                       d.margin.top + d.border.top + d.padding.top;
     }
 
-    fn calculate_float_position(&mut self, containing_block: Dimensions, previous_block: &Dimensions) {
+    fn calculate_float_position(&mut self, containing_block: Dimensions, previous_width: f32) {
         let style = self.get_style_node();
         let d = &mut self.dimensions;
 
@@ -331,7 +331,7 @@ impl<'a> LayoutBox<'a> {
         match float_direction.unwrap() {
             Float::FloatLeft => {
                 d.content.x =
-                containing_block.content.x + d.margin.left + d.border.left + d.padding.left;
+                containing_block.content.x + d.margin.left + d.border.left + d.padding.left + previous_width;
             },
             Float::FloatRight => {
                 let self_width_right = d.content.width + d.margin.right + d.border.right + d.padding.right;
@@ -340,7 +340,7 @@ impl<'a> LayoutBox<'a> {
             },
         }
 
-        d.content.y = previous_block.margin_box().y + previous_block.margin_box().height +
+        d.content.y = containing_block.content.y + containing_block.content.height +
                       d.margin.top + d.border.top + d.padding.top;
     }
 
@@ -349,17 +349,30 @@ impl<'a> LayoutBox<'a> {
     /// Sets `self.dimensions.height` to the total content height.
     fn layout_block_children(&mut self) {
         let d = &mut self.dimensions;
-        let mut prev_dimension: &Dimensions = &Default::default();
+
+        let mut left_float_width = 0f32;
+        let mut right_float_width = 0f32;
 
         for child in self.children.iter_mut() {
-            if let FloatNode(_) = child.box_type {
-                child.layout_float(*d, prev_dimension);
+            if let FloatNode(style) = child.box_type {
+                match style.float_value().unwrap() {
+                    Float::FloatLeft => { child.layout_float(*d, left_float_width);
+                        right_float_width = 0f32;
+                        left_float_width += child.dimensions.margin_box().width;
+                    },
+                    Float::FloatRight => { child.layout_float(*d, right_float_width);
+                        left_float_width = 0f32;
+                        right_float_width += child.dimensions.margin_box().width;
+                    },
+                };
             } else {
                 child.layout(*d);
                 // Increment the height so each child is laid out below the previous one.
                 d.content.height = d.content.height + child.dimensions.margin_box().height;
+
+                left_float_width = 0f32;
+                right_float_width = 0f32;
             }
-            prev_dimension = &child.dimensions;
         }
     }
 
