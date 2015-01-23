@@ -37,7 +37,16 @@ fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox) {
     render_background(list, layout_box);
     render_borders(list, layout_box);
     for child in layout_box.children.iter() {
-        render_layout_box(list, child);
+        match child.box_type {
+            FloatNode(_) => continue,
+            _ => render_layout_box(list, child),
+        };
+    }
+
+    for child in layout_box.children.iter() {
+        if let FloatNode(style_node) = child.box_type {
+            render_layout_box(list, child);
+        }
     }
 }
 
