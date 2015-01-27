@@ -81,7 +81,7 @@ pub fn layout_tree<'a>(node: &'a StyledNode<'a>, mut containing_block: Dimension
 
     let mut root_box = build_layout_tree(node);
 
-    let mut float_list: Vec<Dimensions> = Vec::new();
+    let mut float_list: Vec<(Float, Dimensions)> = Vec::new();
     root_box.layout(containing_block, &mut float_list);
     return root_box;
 }
@@ -116,7 +116,7 @@ fn create_layout_box<'a>(style_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
 
 impl<'a> LayoutBox<'a> {
     /// Lay out a box and its descendants.
-    fn layout(&mut self, containing_block: Dimensions, float_list: &mut Vec<Dimensions>) {
+    fn layout(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
         match self.box_type {
             BlockNode(_) => self.layout_block(containing_block, float_list),
             InlineNode(_) => {} // TODO
@@ -129,7 +129,7 @@ impl<'a> LayoutBox<'a> {
     }
 
     /// Lay out a block-level element and its descendants.
-    fn layout_block(&mut self, containing_block: Dimensions, float_list: &mut Vec<Dimensions>) {
+    fn layout_block(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
         // Child width can depend on parent width, so we need to calculate this box's width before
         // laying out its children.
         self.calculate_block_width(containing_block);
@@ -145,7 +145,7 @@ impl<'a> LayoutBox<'a> {
         self.calculate_block_height();
     }
 
-    fn layout_float(&mut self, containing_block: Dimensions, float_rect: &mut Rect, previous_float: Option<Dimensions>, float_list: &mut Vec<Dimensions>) {
+    fn layout_float(&mut self, containing_block: Dimensions, float_rect: &mut Rect, previous_float: Option<Dimensions>, float_list: &mut Vec<(Float, Dimensions)>) {
         self.calculate_float_width(containing_block);
 
         self.calculate_float_position(containing_block, float_rect);
@@ -164,7 +164,7 @@ impl<'a> LayoutBox<'a> {
 
         self.calculate_block_height();
 
-        float_list.push(self.dimensions);
+        float_list.push((self.get_style_node().float_value().unwrap(), self.dimensions));
     }
 
     /// Calculate the width of a block-level non-replaced element in normal flow.
@@ -393,8 +393,7 @@ impl<'a> LayoutBox<'a> {
         }
     }
 
-    fn shift_float_by_other_floats(&mut self, float_rect: &mut Rect, float_list: &Vec<Dimensions>) -> Option<Dimensions> {
-        let name = self.get_style_node().tag_name();
+    fn shift_float_by_other_floats(&mut self, float_rect: &mut Rect, float_list: &Vec<(Float, Dimensions)>) -> Option<Dimensions> {
         let mut shift_by = None;
 
         let float_direction = match self.box_type {
@@ -402,31 +401,43 @@ impl<'a> LayoutBox<'a> {
             _ => None,
         };
 
-        for other in float_list.iter().rev() {
+        for &(ref other_direction, ref other) in float_list.iter() {
+            let mut same_direction = true;
             if self.dimensions.margin_box().intersect(&other.margin_box()) {
                 match float_direction {
                     Some(Float::FloatLeft) => {
-                        let mut diff = self.dimensions.content.x;
-                        let other_right = other.content.x + other.content.width + other.padding.right + other.border.right + other.margin.right;
-                        self.dimensions.content.x = other_right + self.dimensions.margin.left + self.dimensions.border.left + self.dimensions.padding.left;
-                        diff = self.dimensions.content.x - diff;
-                        float_rect.width += diff;
+                        if *other_direction == Float::FloatLeft {
+                            let mut diff = self.dimensions.content.x;
+                            let other_right = other.content.x + other.content.width + other.padding.right + other.border.right + other.margin.right;
+                            self.dimensions.content.x = other_right + self.dimensions.margin.left + self.dimensions.border.left + self.dimensions.padding.left;
+                            diff = self.dimensions.content.x - diff;
+                            float_rect.width += diff;
+                        } else {
+                            same_direction = false;
+                        }
                     },
                     Some(Float::FloatRight) => {
-                        let mut diff = self.dimensions.content.x;
-                        let other_left = other.content.x - other.padding.left - other.border.left - other.margin.left;
-                        self.dimensions.content.x = other_left - self.dimensions.margin.right - self.dimensions.border.right
-                                                    - self.dimensions.padding.right - self.dimensions.content.width;
-                        diff = diff - self.dimensions.content.x;
-                        float_rect.width += diff;
+                        if *other_direction == Float::FloatRight {
+                            let mut diff = self.dimensions.content.x;
+                            let other_left = other.content.x - other.padding.left - other.border.left - other.margin.left;
+                            self.dimensions.content.x = other_left - self.dimensions.margin.right - self.dimensions.border.right
+                                                        - self.dimensions.padding.right - self.dimensions.content.width;
+                            diff = diff - self.dimensions.content.x;
+                            float_rect.width += diff;
+                        } else {
+                            same_direction = false;
+                        }
                     },
                     None => panic!("wrong float value"),
                 }
-                shift_by = Some(*other);
-            } else {
-                if let Some(any) = shift_by {
-                    break;
+                if !same_direction {
+                    let mut diff = self.dimensions.content.y;
+                    let other_bottom = other.content.y + other.content.height + other.padding.bottom + other.border.bottom + other.margin.bottom;
+                    self.dimensions.content.y = other_bottom + self.dimensions.margin.top + self.dimensions.border.top + self.dimensions.padding.top;
+                    diff = self.dimensions.content.y - diff;
+                    float_rect.height += diff;
                 }
+                shift_by = Some(*other);
             }
         }
         return shift_by;
@@ -435,7 +446,7 @@ impl<'a> LayoutBox<'a> {
     /// Lay out the block's children within its content area.
     ///
     /// Sets `self.dimensions.height` to the total content height.
-    fn layout_block_children(&mut self, float_list: &mut Vec<Dimensions>) {
+    fn layout_block_children(&mut self, float_list: &mut Vec<(Float, Dimensions)>) {
         let d = &mut self.dimensions;
 
         let mut left_float_rect: Rect = Default::default();
