@@ -4,7 +4,7 @@ use css::{Value, Declaration};
 
 static SHORTHAND: [&'static str; 4] = ["border", "border-width", "margin", "padding"];
 
-static BORDER_WIDTH_PROPERTIES: [&'static str; 4] = ["border-width-top", "border-width-bottom", "border-width-left", "border-width-right"];
+static BORDER_WIDTH_PROPERTIES: [&'static str; 4] = ["border-top-width", "border-bottom-width", "border-left-width", "border-right-width"];
 static MARGIN_PROPERTIES: [&'static str; 4] = ["margin-top", "margin-bottom", "margin-left", "margin-right"];
 static PADDING_PROPERTIES: [&'static str; 4] = ["padding-top", "padding-bottom", "padding-left", "padding-right"];
 static ORDER: [[usize; 4]; 4] = [[0, 0, 0, 0], [0, 0, 1, 1], [0, 2, 1, 1], [0, 2, 3, 1]];
