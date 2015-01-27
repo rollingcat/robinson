@@ -118,7 +118,10 @@ impl<'a> LayoutBox<'a> {
         match self.box_type {
             BlockNode(_) => self.layout_block(containing_block),
             InlineNode(_) => {} // TODO
-            FloatNode(_) => self.layout_float(containing_block, 0f32, 0f32),
+            FloatNode(_) => {
+                let mut rect: Rect = Default::default();
+                self.layout_float(containing_block, &mut rect, None)
+            },
             AnonymousBlock => {} // TODO
         }
     }
@@ -140,16 +143,16 @@ impl<'a> LayoutBox<'a> {
         self.calculate_block_height();
     }
 
-    fn layout_float(&mut self, containing_block: Dimensions, previous_width: f32, previous_height: f32) {
+    fn layout_float(&mut self, containing_block: Dimensions, float_rect: &mut Rect, previous_float: Option<&LayoutBox>) {
         self.calculate_float_width(containing_block);
 
-        self.calculate_float_position(containing_block, previous_width);
+        self.calculate_float_position(containing_block, float_rect);
 
         self.layout_block_children();
 
         self.calculate_block_height();
 
-        self.calculate_float_intersection(containing_block, previous_width, previous_height);
+        self.shift_float_by_container_width(containing_block, float_rect, previous_float);
     }
 
     /// Calculate the width of a block-level non-replaced element in normal flow.
@@ -307,7 +310,7 @@ impl<'a> LayoutBox<'a> {
                       d.margin.top + d.border.top + d.padding.top;
     }
 
-    fn calculate_float_position(&mut self, containing_block: Dimensions, previous_width: f32) {
+    fn calculate_float_position(&mut self, containing_block: Dimensions, float_rect : &Rect) {
         let style = self.get_style_node();
         let d = &mut self.dimensions;
 
@@ -333,28 +336,54 @@ impl<'a> LayoutBox<'a> {
         match float_direction.unwrap() {
             Float::FloatLeft => {
                 d.content.x =
-                containing_block.content.x + d.margin.left + d.border.left + d.padding.left + previous_width;
+                containing_block.content.x + d.margin.left + d.border.left + d.padding.left + float_rect.width;
             },
             Float::FloatRight => {
                 let self_width_right = d.content.width + d.margin.right + d.border.right + d.padding.right;
                 d.content.x =
-                containing_block.content.x + containing_block.content.width - self_width_right;
+                containing_block.content.x + containing_block.content.width - self_width_right - float_rect.width;
             },
         }
 
         d.content.y = containing_block.content.y + containing_block.content.height +
-                      d.margin.top + d.border.top + d.padding.top;
+                      d.margin.top + d.border.top + d.padding.top + float_rect.height;
     }
 
-    fn calculate_float_intersection(&mut self, container: Dimensions, previous_width: f32, previous_height: f32) {
+    fn shift_float_by_container_width(&mut self, container: Dimensions, float_rect : &mut Rect, previous_float: Option<&LayoutBox>) {
         let d = &mut self.dimensions;
-        let right = d.content.x + d.content.width + d.padding.right + d.border.right + d.margin.right;
-        let container_right = container.content.x + container.content.width;
 
-        if right > container_right {
-            d.content.x = d.content.x - previous_width;
-            d.content.y = d.content.y + previous_height;
+        if let Some(prev) = previous_float {
+            let float_direction = match self.box_type {
+                FloatNode(node) => node.float_value(),
+                _ => None,
+            };
+
+            match float_direction.unwrap() {
+                Float::FloatLeft => {
+                    let right = d.content.x + d.content.width + d.padding.right + d.border.right + d.margin.right;
+                    let container_right = container.content.x + container.content.width;
+                    if right > container_right {
+                        d.content.x = d.content.x - float_rect.width;
+                        float_rect.width = 0f32;
+
+                        float_rect.height = prev.dimensions.margin_box().height;
+                        d.content.y = d.content.y + float_rect.height;
+                    }
+                },
+                Float::FloatRight => {
+                    let left = d.content.x - d.padding.left - d.border.left - d.margin.left;
+                    let container_left = container.content.x;
+                    if left < container_left {
+                        d.content.x = d.content.x + float_rect.width;
+                        float_rect.width = 0f32;
+
+                        float_rect.height = prev.dimensions.margin_box().height;
+                        d.content.y = d.content.y + float_rect.height;
+                    }
+                },
+            };
         }
+        float_rect.width += d.margin_box().width;
     }
 
     /// Lay out the block's children within its content area.
@@ -363,31 +392,32 @@ impl<'a> LayoutBox<'a> {
     fn layout_block_children(&mut self) {
         let d = &mut self.dimensions;
 
-        let mut left_float_width = 0f32;
-        let mut right_float_width = 0f32;
-        let mut previous_height = 0f32;
+        let mut left_float_rect: Rect = Default::default();
+        let mut right_float_rect: Rect = Default::default();
+
+        let mut previous_left_float: Option<&LayoutBox> = None;
+        let mut previous_right_float: Option<&LayoutBox> = None;
 
         for child in self.children.iter_mut() {
             if let FloatNode(style) = child.box_type {
                 match style.float_value().unwrap() {
-                    Float::FloatLeft => { child.layout_float(*d, left_float_width, previous_height);
-                        right_float_width = 0f32;
-                        left_float_width += child.dimensions.margin_box().width;
+                    Float::FloatLeft => {
+                        child.layout_float(*d, &mut left_float_rect, previous_left_float);
+                        previous_left_float = Some(child);
+                        previous_right_float = None;
                     },
-                    Float::FloatRight => { child.layout_float(*d, right_float_width, previous_height);
-                        left_float_width = 0f32;
-                        right_float_width += child.dimensions.margin_box().width;
+                    Float::FloatRight => { child.layout_float(*d, &mut right_float_rect, previous_right_float);
+                        previous_right_float = Some(child);
+                        previous_left_float = None;
                     },
                 };
-                previous_height = child.dimensions.margin_box().height;
             } else {
                 child.layout(*d);
                 // Increment the height so each child is laid out below the previous one.
                 d.content.height = d.content.height + child.dimensions.margin_box().height;
 
-                left_float_width = 0f32;
-                right_float_width = 0f32;
-                previous_height = 0f32;
+                previous_left_float = None;
+                previous_right_float = None;
             }
         }
     }
