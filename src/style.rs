@@ -36,6 +36,13 @@ pub enum Float {
     FloatRight,
 }
 
+#[derive(PartialEq)]
+pub enum Clear {
+    ClearLeft,
+    ClearRight,
+    ClearBoth,
+}
+
 impl<'a> StyledNode<'a> {
     /// Return the specified value of a property if it exists, otherwise `None`.
     pub fn value(&self, name: &str) -> Option<Value> {
@@ -67,6 +74,18 @@ impl<'a> StyledNode<'a> {
                 "left" => Some(Float::FloatLeft),
                 "right" => Some(Float::FloatRight),
                 _ => panic!("Wrong float value"),
+            },
+            _ => None
+        }
+    }
+
+    pub fn clear_value(&self) -> Option<Clear> {
+        match self.value("clear") {
+            Some(Value::Keyword(s)) => match s.as_slice() {
+                "left" => Some(Clear::ClearLeft),
+                "right" => Some(Clear::ClearRight),
+                "both" => Some(Clear::ClearBoth),
+                _ => panic!("Wrong clear value"),
             },
             _ => None
         }

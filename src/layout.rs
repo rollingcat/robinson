@@ -1,6 +1,6 @@
 ///! Basic CSS block layout.
 
-use style::{StyledNode, Display, Float};
+use style::{StyledNode, Display, Float, Clear};
 use css::Value::{Keyword, Length};
 use css::Unit::Px;
 use std::default::Default;
@@ -155,14 +155,14 @@ impl<'a> LayoutBox<'a> {
             self.shift_float_by_container_width(containing_block, float_rect, shift);
             shift = self.shift_float_by_other_floats(float_rect, float_list);
             if let None = shift {
-                float_rect.width += self.dimensions.margin_box().width;
+                float_rect.x += self.dimensions.margin_box().width;
                 break;
             }
         }
 
         self.layout_block_children(float_list);
 
-        self.calculate_block_height();
+        self.calculate_float_height(float_rect);
 
         float_list.push((self.get_style_node().float_value().unwrap(), self.dimensions));
     }
@@ -328,17 +328,17 @@ impl<'a> LayoutBox<'a> {
         match float_direction.unwrap() {
             Float::FloatLeft => {
                 d.content.x =
-                containing_block.content.x + d.margin.left + d.border.left + d.padding.left + float_rect.width;
+                containing_block.content.x + d.margin.left + d.border.left + d.padding.left + float_rect.x;
             },
             Float::FloatRight => {
                 let self_width_right = d.content.width + d.margin.right + d.border.right + d.padding.right;
                 d.content.x =
-                containing_block.content.x + containing_block.content.width - self_width_right - float_rect.width;
+                containing_block.content.x + containing_block.content.width - self_width_right - float_rect.x;
             },
         }
 
         d.content.y = containing_block.content.y + containing_block.content.height +
-                      d.margin.top + d.border.top + d.padding.top + float_rect.height;
+                      d.margin.top + d.border.top + d.padding.top + float_rect.y;
     }
 
     fn shift_float_by_container_width(&mut self, container: Dimensions, float_rect: &mut Rect, previous_float: Option<Dimensions>) {
@@ -350,22 +350,22 @@ impl<'a> LayoutBox<'a> {
             match float_direction.unwrap() {
                 Float::FloatLeft => {
                     if d.margin_box().max_x() > container.content.max_x() {
-                        d.content.x = d.content.x - float_rect.width;
+                        d.content.x = d.content.x - float_rect.x;
                         downwards = true;
                     }
                 },
                 Float::FloatRight => {
                     if d.margin_box().x < container.content.x {
-                        d.content.x = d.content.x + float_rect.width;
+                        d.content.x = d.content.x + float_rect.x;
                         downwards = true;
                     }
                 },
             };
             if downwards {
-                float_rect.width = 0f32;
+                float_rect.x = 0f32;
                 let height = prev.margin_box().height;
-                d.content.y = d.content.y + height;
-                float_rect.height += height;
+                d.content.y += height;
+                float_rect.y += height;
             }
         }
     }
@@ -383,20 +383,20 @@ impl<'a> LayoutBox<'a> {
                         let mut diff = self.dimensions.content.x;
                         self.dimensions.content.x = other.margin_box().max_x() + self.dimensions.margin.left + self.dimensions.border.left + self.dimensions.padding.left;
                         diff = self.dimensions.content.x - diff;
-                        float_rect.width += diff;
+                        float_rect.x += diff;
                     },
                     (&Float::FloatRight, &Float::FloatRight) => {
                         let mut diff = self.dimensions.content.x;
                         self.dimensions.content.x = other.margin_box().x - self.dimensions.margin.right - self.dimensions.border.right
                                                     - self.dimensions.padding.right - self.dimensions.content.width;
                         diff = diff - self.dimensions.content.x;
-                        float_rect.width += diff;
+                        float_rect.x += diff;
                     },
                     (_, _) => {
                         let mut diff = self.dimensions.content.y;
                         self.dimensions.content.y = other.margin_box().max_y() + self.dimensions.margin.top + self.dimensions.border.top + self.dimensions.padding.top;
                         diff = self.dimensions.content.y - diff;
-                        float_rect.height += diff;
+                        float_rect.y += diff;
                     },
                 }
                 shift_by = Some(*other);
@@ -449,6 +449,21 @@ impl<'a> LayoutBox<'a> {
             Some(value) => { self.dimensions.content.height = value.to_px(); }
             _ => {}
         }
+    }
+
+    fn calculate_float_height(&mut self, float_rect: &mut Rect) {
+        self.calculate_block_height();
+
+        let height = self.dimensions.margin_box().height;
+        if height > float_rect.height {
+            // Save maximum height
+            float_rect.height = height;
+        }
+    }
+
+    fn calculate_clear_height(&self, left_float_rect: &Rect, right_float_rect: &Rect) -> f32 {
+        let clear_value = self.get_style_node().clear_value();
+        0f32
     }
 
     /// Where a new inline child should go.
