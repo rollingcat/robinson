@@ -18,7 +18,7 @@ pub struct Rect {
     pub height: f32,
 }
 
-#[derive(Default, Show)]
+#[derive(Default)]
 pub struct Dimensions {
     /// Position of the content area relative to the document origin:
     pub content: Rect,
@@ -45,6 +45,7 @@ pub struct LayoutBox<'a> {
     pub dimensions: Dimensions,
     pub box_type: BoxType<'a>,
     pub children: Vec<LayoutBox<'a>>,
+    pub float_info: FloatInfo,
 }
 
 pub enum BoxType<'a> {
@@ -54,12 +55,19 @@ pub enum BoxType<'a> {
     AnonymousBlock,
 }
 
+#[derive(Default, Show)]
+pub struct FloatInfo {
+    pub left_float_max_y: f32,
+    pub right_float_max_y: f32,
+}
+
 impl<'a> LayoutBox<'a> {
     fn new(box_type: BoxType) -> LayoutBox {
         LayoutBox {
             box_type: box_type,
             dimensions: Default::default(),
             children: Vec::new(),
+            float_info: Default::default(),
         }
     }
 
@@ -448,6 +456,36 @@ impl<'a> LayoutBox<'a> {
                 previous_left_float = None;
                 previous_right_float = None;
             }
+            // Update maximum float y
+            if child.float_info.left_float_max_y > self.float_info.left_float_max_y {
+                self.float_info.left_float_max_y = child.float_info.left_float_max_y;
+            }
+            if child.float_info.right_float_max_y > self.float_info.right_float_max_y {
+                self.float_info.right_float_max_y = child.float_info.right_float_max_y;
+            }
+            // Check clear
+            if let Some(clear_value) = child.get_style_node().clear_value() {
+                match clear_value {
+                    Clear::ClearLeft => {
+                        if d.content.max_y() < self.float_info.left_float_max_y {
+                            d.content.height += (self.float_info.left_float_max_y - d.content.max_y());
+                        }
+                    }
+                    Clear::ClearRight => {
+                        if d.content.max_y() < self.float_info.right_float_max_y {
+                            d.content.height += (self.float_info.right_float_max_y - d.content.max_y());
+                        }
+                    }
+                    Clear::ClearBoth => {
+                        if d.content.max_y() < self.float_info.left_float_max_y {
+                            d.content.height += (self.float_info.left_float_max_y - d.content.max_y());
+                        }
+                        if d.content.max_y() < self.float_info.right_float_max_y {
+                            d.content.height += (self.float_info.right_float_max_y - d.content.max_y());
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -462,17 +500,27 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn calculate_float_height(&mut self, float_rect: &mut Rect) {
-        self.calculate_block_height();
+        let height = self.dimensions.margin_box().max_y();
 
-        let height = self.dimensions.margin_box().height;
-        if height > float_rect.height {
-            // Save maximum height
-            float_rect.height = height;
+        match self.get_style_node().float_value().unwrap() {
+            Float::FloatLeft => {
+                if height > self.float_info.left_float_max_y {
+                    self.float_info.left_float_max_y = height;
+                }
+            },
+            Float::FloatRight => {
+                if height > self.float_info.right_float_max_y {
+                    self.float_info.right_float_max_y = height;
+                }
+            },
         }
+
+        self.calculate_block_height();
     }
 
     fn calculate_clear_height(&self, left_float_rect: &Rect, right_float_rect: &Rect) -> f32 {
         let clear_value = self.get_style_node().clear_value();
+
         0f32
     }
 
