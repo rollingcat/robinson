@@ -259,34 +259,21 @@ impl<'a> LayoutBox<'a> {
 
         // `width` has initial value `auto`.
         let auto = Keyword("auto".to_string());
-        let mut width = style.value("width").unwrap_or(auto.clone());
 
         // margin, border, and padding have initial value 0.
         let zero = Length(0.0, Px);
 
-        let mut margin_left = style.lookup("margin-left", "margin", &zero);
-        let mut margin_right = style.lookup("margin-right", "margin", &zero);
-
-        let border_left = style.lookup("border-left-width", "border-width", &zero);
-        let border_right = style.lookup("border-right-width", "border-width", &zero);
-
-        let padding_left = style.lookup("padding-left", "padding", &zero);
-        let padding_right = style.lookup("padding-right", "padding", &zero);
-
-        let total = [&margin_left, &margin_right, &border_left, &border_right,
-                     &padding_left, &padding_right, &width].iter().map(|v| v.to_px()).sum();
-
         let d = &mut self.dimensions;
-        d.content.width = width.to_px();
+        d.content.width = style.value("width").unwrap_or(auto.clone()).to_px();
 
-        d.padding.left = padding_left.to_px();
-        d.padding.right = padding_right.to_px();
+        d.padding.left = style.lookup("padding-left", "padding", &zero).to_px();
+        d.padding.right = style.lookup("padding-right", "padding", &zero).to_px();
 
-        d.border.left = border_left.to_px();
-        d.border.right = border_right.to_px();
+        d.border.left = style.lookup("border-left-width", "border-width", &zero).to_px();
+        d.border.right = style.lookup("border-right-width", "border-width", &zero).to_px();
 
-        d.margin.left = margin_left.to_px();
-        d.margin.right = margin_right.to_px();
+        d.margin.left = style.lookup("margin-left", "margin", &zero).to_px();
+        d.margin.right = style.lookup("margin-right", "margin", &zero).to_px();
     }
 
     /// Finish calculating the block's edge sizes, and position it within its containing block.
@@ -335,10 +322,7 @@ impl<'a> LayoutBox<'a> {
         d.padding.top = style.lookup("padding-top", "padding", &zero).to_px();
         d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_px();
 
-        let float_direction = match self.box_type {
-            FloatNode(node) => node.float_value(),
-            _ => None,
-        };
+        let float_direction = style.float_value();
         assert!(float_direction != None);
 
         match float_direction.unwrap() {
@@ -358,84 +342,62 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn shift_float_by_container_width(&mut self, container: Dimensions, float_rect: &mut Rect, previous_float: Option<Dimensions>) {
+        let float_direction = self.get_style_node().float_value();
         let d = &mut self.dimensions;
 
         if let Some(prev) = previous_float {
-            let float_direction = match self.box_type {
-                FloatNode(node) => node.float_value(),
-                _ => None,
-            };
-
+            let mut downwards = false;
             match float_direction.unwrap() {
                 Float::FloatLeft => {
-                    let right = d.content.x + d.content.width + d.padding.right + d.border.right + d.margin.right;
-                    let container_right = container.content.x + container.content.width;
-                    if right > container_right {
+                    if d.margin_box().max_x() > container.content.max_x() {
                         d.content.x = d.content.x - float_rect.width;
-                        float_rect.width = 0f32;
-
-                        float_rect.height = prev.margin_box().height;
-                        d.content.y = d.content.y + float_rect.height;
+                        downwards = true;
                     }
                 },
                 Float::FloatRight => {
-                    let left = d.content.x - d.padding.left - d.border.left - d.margin.left;
-                    let container_left = container.content.x;
-                    if left < container_left {
+                    if d.margin_box().x < container.content.x {
                         d.content.x = d.content.x + float_rect.width;
-                        float_rect.width = 0f32;
-
-                        float_rect.height = prev.margin_box().height;
-                        d.content.y = d.content.y + float_rect.height;
+                        downwards = true;
                     }
                 },
             };
+            if downwards {
+                float_rect.width = 0f32;
+                let height = prev.margin_box().height;
+                d.content.y = d.content.y + height;
+                float_rect.height += height;
+            }
         }
     }
 
     fn shift_float_by_other_floats(&mut self, float_rect: &mut Rect, float_list: &Vec<(Float, Dimensions)>) -> Option<Dimensions> {
         let mut shift_by = None;
-
-        let float_direction = match self.box_type {
-            FloatNode(node) => node.float_value(),
-            _ => None,
-        };
+        let float_direction = self.get_style_node().float_value().unwrap();
 
         for &(ref other_direction, ref other) in float_list.iter() {
             let mut same_direction = true;
             if self.dimensions.margin_box().intersect(&other.margin_box()) {
-                match float_direction {
-                    Some(Float::FloatLeft) => {
-                        if *other_direction == Float::FloatLeft {
-                            let mut diff = self.dimensions.content.x;
-                            let other_right = other.content.x + other.content.width + other.padding.right + other.border.right + other.margin.right;
-                            self.dimensions.content.x = other_right + self.dimensions.margin.left + self.dimensions.border.left + self.dimensions.padding.left;
-                            diff = self.dimensions.content.x - diff;
-                            float_rect.width += diff;
-                        } else {
-                            same_direction = false;
-                        }
+                // When intersects with other float.
+                match (&float_direction, other_direction) {
+                    (&Float::FloatLeft, &Float::FloatLeft) => {
+                        let mut diff = self.dimensions.content.x;
+                        self.dimensions.content.x = other.margin_box().max_x() + self.dimensions.margin.left + self.dimensions.border.left + self.dimensions.padding.left;
+                        diff = self.dimensions.content.x - diff;
+                        float_rect.width += diff;
                     },
-                    Some(Float::FloatRight) => {
-                        if *other_direction == Float::FloatRight {
-                            let mut diff = self.dimensions.content.x;
-                            let other_left = other.content.x - other.padding.left - other.border.left - other.margin.left;
-                            self.dimensions.content.x = other_left - self.dimensions.margin.right - self.dimensions.border.right
-                                                        - self.dimensions.padding.right - self.dimensions.content.width;
-                            diff = diff - self.dimensions.content.x;
-                            float_rect.width += diff;
-                        } else {
-                            same_direction = false;
-                        }
+                    (&Float::FloatRight, &Float::FloatRight) => {
+                        let mut diff = self.dimensions.content.x;
+                        self.dimensions.content.x = other.margin_box().x - self.dimensions.margin.right - self.dimensions.border.right
+                                                    - self.dimensions.padding.right - self.dimensions.content.width;
+                        diff = diff - self.dimensions.content.x;
+                        float_rect.width += diff;
                     },
-                    None => panic!("wrong float value"),
-                }
-                if !same_direction {
-                    let mut diff = self.dimensions.content.y;
-                    let other_bottom = other.content.y + other.content.height + other.padding.bottom + other.border.bottom + other.margin.bottom;
-                    self.dimensions.content.y = other_bottom + self.dimensions.margin.top + self.dimensions.border.top + self.dimensions.padding.top;
-                    diff = self.dimensions.content.y - diff;
-                    float_rect.height += diff;
+                    (_, _) => {
+                        let mut diff = self.dimensions.content.y;
+                        self.dimensions.content.y = other.margin_box().max_y() + self.dimensions.margin.top + self.dimensions.border.top + self.dimensions.padding.top;
+                        diff = self.dimensions.content.y - diff;
+                        float_rect.height += diff;
+                    },
                 }
                 shift_by = Some(*other);
             }
