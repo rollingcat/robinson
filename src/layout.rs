@@ -153,7 +153,7 @@ impl<'a> LayoutBox<'a> {
         let mut shift = previous_float;
         loop {
             self.shift_float_by_container_width(containing_block, float_rect, shift);
-            shift = self.shift_float_by_other_floats(float_rect, float_list);
+            shift = self.shift_float_by_other_floats(float_rect, &previous_float, float_list);
             if let None = shift {
                 float_rect.x += self.dimensions.margin_box().width;
                 break;
@@ -370,7 +370,7 @@ impl<'a> LayoutBox<'a> {
         }
     }
 
-    fn shift_float_by_other_floats(&mut self, float_rect: &mut Rect, float_list: &Vec<(Float, Dimensions)>) -> Option<Dimensions> {
+    fn shift_float_by_other_floats(&mut self, float_rect: &mut Rect, previous_float: &Option<Dimensions>, float_list: &Vec<(Float, Dimensions)>) -> Option<Dimensions> {
         let mut shift_by = None;
         let float_direction = self.get_style_node().float_value().unwrap();
 
@@ -394,9 +394,19 @@ impl<'a> LayoutBox<'a> {
                     },
                     (_, _) => {
                         let mut diff = self.dimensions.content.y;
-                        self.dimensions.content.y = other.margin_box().max_y() + self.dimensions.margin.top + self.dimensions.border.top + self.dimensions.padding.top;
+                        if let None = *previous_float {
+                            self.dimensions.content.y = other.margin_box().max_y() + self.dimensions.margin.top + self.dimensions.border.top + self.dimensions.padding.top;
+                        } else {
+                            self.dimensions.content.y = previous_float.unwrap().margin_box().max_y() + self.dimensions.margin.top + self.dimensions.border.top + self.dimensions.padding.top;
+                        }
                         diff = self.dimensions.content.y - diff;
                         float_rect.y += diff;
+
+                        match float_direction {
+                            Float::FloatLeft => self.dimensions.content.x -= float_rect.x,
+                            Float::FloatRight => self.dimensions.content.x += float_rect.x,
+                        };
+                        float_rect.x = 0f32;
                     },
                 }
                 shift_by = Some(*other);
