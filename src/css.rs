@@ -294,11 +294,8 @@ impl Parser {
 
     fn parse_color(&mut self) -> Value {
         assert!(self.consume_char() == '#');
-        Value::ColorValue(Color {
-            r: self.parse_hex_pair(),
-            g: self.parse_hex_pair(),
-            b: self.parse_hex_pair(),
-            a: 255 })
+        let mut hex = self.consume_while(|c| c != ';');
+        Value::ColorValue(convert_hex_to_color(&mut hex))
     }
 
     /// Parse two hexadecimal digits.
@@ -365,5 +362,20 @@ fn valid_identifier_char(c: char) -> bool {
     match c {
         'a'...'z' | 'A'...'Z' | '0'...'9' | '-' | '_' | '%' => true, // TODO: Include U+00A0 and higher.
         _ => false,
+    }
+}
+
+fn convert_hex_to_color(input: &mut String) -> Color {
+    if (input.len() / 3) == 1 {
+        for i in range(0, 3).rev() {
+            let c = input.char_at(i);
+            input.insert(i + 1, c);
+        }
+    }
+    Color {
+        r: FromStrRadix::from_str_radix(input.slice(0, 2), 0x10).unwrap(),
+        g: FromStrRadix::from_str_radix(input.slice(2, 4), 0x10).unwrap(),
+        b: FromStrRadix::from_str_radix(input.slice(4, 6), 0x10).unwrap(),
+        a: 255,
     }
 }
