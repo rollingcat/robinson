@@ -170,7 +170,7 @@ impl<'a> LayoutBox<'a> {
 
         self.layout_block_children(float_list);
 
-        self.calculate_float_height(float_rect);
+        self.calculate_float_height();
 
         float_list.push((self.get_style_node().float_value().unwrap(), self.dimensions));
     }
@@ -436,6 +436,9 @@ impl<'a> LayoutBox<'a> {
         let mut previous_right_float: Option<Dimensions> = None;
 
         for child in self.children.iter_mut() {
+            // Check clear
+            d.content.height += child.calculate_clear_height(&self.float_info, d.content.max_y());
+
             if let FloatNode(style) = child.box_type {
                 match style.float_value().unwrap() {
                     Float::FloatLeft => {
@@ -463,29 +466,6 @@ impl<'a> LayoutBox<'a> {
             if child.float_info.right_float_max_y > self.float_info.right_float_max_y {
                 self.float_info.right_float_max_y = child.float_info.right_float_max_y;
             }
-            // Check clear
-            if let Some(clear_value) = child.get_style_node().clear_value() {
-                match clear_value {
-                    Clear::ClearLeft => {
-                        if d.content.max_y() < self.float_info.left_float_max_y {
-                            d.content.height += (self.float_info.left_float_max_y - d.content.max_y());
-                        }
-                    }
-                    Clear::ClearRight => {
-                        if d.content.max_y() < self.float_info.right_float_max_y {
-                            d.content.height += (self.float_info.right_float_max_y - d.content.max_y());
-                        }
-                    }
-                    Clear::ClearBoth => {
-                        if d.content.max_y() < self.float_info.left_float_max_y {
-                            d.content.height += (self.float_info.left_float_max_y - d.content.max_y());
-                        }
-                        if d.content.max_y() < self.float_info.right_float_max_y {
-                            d.content.height += (self.float_info.right_float_max_y - d.content.max_y());
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -499,29 +479,48 @@ impl<'a> LayoutBox<'a> {
         }
     }
 
-    fn calculate_float_height(&mut self, float_rect: &mut Rect) {
-        let height = self.dimensions.margin_box().max_y();
+    fn calculate_float_height(&mut self) {
+        self.calculate_block_height();
 
+        let height = self.dimensions.margin_box().max_y();
         match self.get_style_node().float_value().unwrap() {
             Float::FloatLeft => {
-                if height > self.float_info.left_float_max_y {
-                    self.float_info.left_float_max_y = height;
-                }
+                self.float_info.left_float_max_y = height;
+                self.float_info.right_float_max_y = 0f32;
             },
             Float::FloatRight => {
-                if height > self.float_info.right_float_max_y {
-                    self.float_info.right_float_max_y = height;
-                }
+                self.float_info.right_float_max_y = height;
+                self.float_info.left_float_max_y = 0f32;
             },
         }
-
-        self.calculate_block_height();
     }
 
-    fn calculate_clear_height(&self, left_float_rect: &Rect, right_float_rect: &Rect) -> f32 {
-        let clear_value = self.get_style_node().clear_value();
-
-        0f32
+    fn calculate_clear_height(&self, float_info: &FloatInfo, current_max_y: f32) -> f32 {
+        let mut clear_height = 0f32;
+        if let Some(clear_value) = self.get_style_node().clear_value() {
+            match clear_value {
+                Clear::ClearLeft =>
+                    if current_max_y < float_info.left_float_max_y {
+                        clear_height = float_info.left_float_max_y - current_max_y;
+                    },
+                Clear::ClearRight =>
+                    if current_max_y < float_info.right_float_max_y {
+                        clear_height = float_info.right_float_max_y - current_max_y;
+                    },
+                Clear::ClearBoth => {
+                    let float_max_y;
+                    if float_info.left_float_max_y > float_info.right_float_max_y {
+                        float_max_y = float_info.left_float_max_y;
+                    } else {
+                        float_max_y = float_info.right_float_max_y;
+                    }
+                    if current_max_y < float_max_y {
+                        clear_height = float_max_y - current_max_y;
+                    }
+                },
+            }
+        }
+        return clear_height;
     }
 
     /// Where a new inline child should go.
