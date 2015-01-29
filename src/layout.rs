@@ -200,7 +200,7 @@ impl<'a> LayoutBox<'a> {
         let padding_right = style.lookup("padding-right", "padding", &zero);
 
         let total = [&margin_left, &margin_right, &border_left, &border_right,
-                     &padding_left, &padding_right, &width].iter().map(|v| v.to_px()).sum();
+                     &padding_left, &padding_right, &width].iter().map(|v| v.to_px().unwrap_or(v.percent_to_px(containing_block.content.width))).sum();
 
         // If width is not auto and the total is wider than the container, treat auto margins as 0.
         if width != auto && total > containing_block.content.width {
@@ -220,7 +220,7 @@ impl<'a> LayoutBox<'a> {
         match (width == auto, margin_left == auto, margin_right == auto) {
             // If the values are overconstrained, calculate margin_right.
             (false, false, false) => {
-                margin_right = Length(margin_right.to_px() + underflow, Px);
+                margin_right = Length(margin_right.to_px().unwrap() + underflow, Px);
             }
 
             // If exactly one size is auto, its used value follows from the equality.
@@ -238,7 +238,7 @@ impl<'a> LayoutBox<'a> {
                 } else {
                     // Width can't be negative. Adjust the right margin instead.
                     width = Length(0.0, Px);
-                    margin_right = Length(margin_right.to_px() + underflow, Px);
+                    margin_right = Length(margin_right.to_px().unwrap() + underflow, Px);
                 }
             }
 
@@ -250,16 +250,16 @@ impl<'a> LayoutBox<'a> {
         }
 
         let d = &mut self.dimensions;
-        d.content.width = width.to_px();
+        d.content.width = width.to_px().unwrap_or(width.percent_to_px(containing_block.content.width));
 
-        d.padding.left = padding_left.to_px();
-        d.padding.right = padding_right.to_px();
+        d.padding.left = padding_left.to_px().unwrap();
+        d.padding.right = padding_right.to_px().unwrap();
 
-        d.border.left = border_left.to_px();
-        d.border.right = border_right.to_px();
+        d.border.left = border_left.to_px().unwrap();
+        d.border.right = border_right.to_px().unwrap();
 
-        d.margin.left = margin_left.to_px();
-        d.margin.right = margin_right.to_px();
+        d.margin.left = margin_left.to_px().unwrap();
+        d.margin.right = margin_right.to_px().unwrap();
     }
 
     fn calculate_float_width(&mut self, containing_block: Dimensions) {
@@ -272,16 +272,17 @@ impl<'a> LayoutBox<'a> {
         let zero = Length(0.0, Px);
 
         let d = &mut self.dimensions;
-        d.content.width = style.value("width").unwrap_or(auto.clone()).to_px();
+        let mut width = style.value("width").unwrap_or(auto.clone());
+        d.content.width = width.to_px().unwrap_or(width.percent_to_px(containing_block.content.width));
 
-        d.padding.left = style.lookup("padding-left", "padding", &zero).to_px();
-        d.padding.right = style.lookup("padding-right", "padding", &zero).to_px();
+        d.padding.left = style.lookup("padding-left", "padding", &zero).to_px().unwrap();
+        d.padding.right = style.lookup("padding-right", "padding", &zero).to_px().unwrap();
 
-        d.border.left = style.lookup("border-left-width", "border-width", &zero).to_px();
-        d.border.right = style.lookup("border-right-width", "border-width", &zero).to_px();
+        d.border.left = style.lookup("border-left-width", "border-width", &zero).to_px().unwrap();
+        d.border.right = style.lookup("border-right-width", "border-width", &zero).to_px().unwrap();
 
-        d.margin.left = style.lookup("margin-left", "margin", &zero).to_px();
-        d.margin.right = style.lookup("margin-right", "margin", &zero).to_px();
+        d.margin.left = style.lookup("margin-left", "margin", &zero).to_px().unwrap();
+        d.margin.right = style.lookup("margin-right", "margin", &zero).to_px().unwrap();
     }
 
     /// Finish calculating the block's edge sizes, and position it within its containing block.
@@ -297,14 +298,14 @@ impl<'a> LayoutBox<'a> {
         let zero = Length(0.0, Px);
 
         // If margin-top or margin-bottom is `auto`, the used value is zero.
-        d.margin.top = style.lookup("margin-top", "margin", &zero).to_px();
-        d.margin.bottom = style.lookup("margin-bottom", "margin", &zero).to_px();
+        d.margin.top = style.lookup("margin-top", "margin", &zero).to_px().unwrap();
+        d.margin.bottom = style.lookup("margin-bottom", "margin", &zero).to_px().unwrap();
 
-        d.border.top = style.lookup("border-top-width", "border-width", &zero).to_px();
-        d.border.bottom = style.lookup("border-bottom-width", "border-width", &zero).to_px();
+        d.border.top = style.lookup("border-top-width", "border-width", &zero).to_px().unwrap();
+        d.border.bottom = style.lookup("border-bottom-width", "border-width", &zero).to_px().unwrap();
 
-        d.padding.top = style.lookup("padding-top", "padding", &zero).to_px();
-        d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_px();
+        d.padding.top = style.lookup("padding-top", "padding", &zero).to_px().unwrap();
+        d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_px().unwrap();
 
         // Position the box below all the previous boxes in the container.
         d.content.x = containing_block.content.x +
@@ -321,14 +322,14 @@ impl<'a> LayoutBox<'a> {
         let zero = Length(0.0, Px);
 
         // If margin-top or margin-bottom is `auto`, the used value is zero.
-        d.margin.top = style.lookup("margin-top", "margin", &zero).to_px();
-        d.margin.bottom = style.lookup("margin-bottom", "margin", &zero).to_px();
+        d.margin.top = style.lookup("margin-top", "margin", &zero).to_px().unwrap();
+        d.margin.bottom = style.lookup("margin-bottom", "margin", &zero).to_px().unwrap();
 
-        d.border.top = style.lookup("border-top-width", "border-width", &zero).to_px();
-        d.border.bottom = style.lookup("border-bottom-width", "border-width", &zero).to_px();
+        d.border.top = style.lookup("border-top-width", "border-width", &zero).to_px().unwrap();
+        d.border.bottom = style.lookup("border-bottom-width", "border-width", &zero).to_px().unwrap();
 
-        d.padding.top = style.lookup("padding-top", "padding", &zero).to_px();
-        d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_px();
+        d.padding.top = style.lookup("padding-top", "padding", &zero).to_px().unwrap();
+        d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_px().unwrap();
 
         let float_direction = style.float_value();
         assert!(float_direction != None);
@@ -474,7 +475,7 @@ impl<'a> LayoutBox<'a> {
         // If the height is set to an explicit length, use that exact length.
         // Otherwise, just keep the value set by `layout_block_children`.
         match self.get_style_node().value("height") {
-            Some(value) => { self.dimensions.content.height = value.to_px(); }
+            Some(value) => { self.dimensions.content.height = value.to_px().unwrap(); }
             _ => {}
         }
     }

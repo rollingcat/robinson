@@ -86,11 +86,20 @@ impl Selector {
 
 impl Value {
     /// Return the size of a length in px, or zero for non-lengths.
-    pub fn to_px(&self) -> f32 {
+    pub fn to_px(&self) -> Option<f32> {
         match *self {
-            Value::Length(f, Unit::Px) => f,
-            Value::Length(f, Unit::Em) => f * FONT_SIZE,
-            _ => 0.0
+            Value::Length(f, Unit::Px) => Some(f),
+            Value::Length(f, Unit::Em) => Some(f * FONT_SIZE),
+            Value::Length(_, Unit::Percent) => None,
+            _ => Some(0f32),
+        }
+    }
+
+    pub fn percent_to_px(&self, container_width: f32) -> f32 {
+        if let Value::Length(f, Unit::Percent) = *self {
+            return container_width * f / 100f32;
+        } else {
+            return self.to_px().unwrap();
         }
     }
 }
