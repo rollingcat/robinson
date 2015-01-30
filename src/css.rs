@@ -267,8 +267,8 @@ impl Parser {
             '#' => self.parse_color(),
             _ => {
                 let value = self.parse_identifier();
-                match self.color_map.get_color(value.as_slice()) {
-                    Some(color) => Value::ColorValue(*color),
+                match self.convert_keyword_to_color(value.as_slice()) {
+                    Some(color) => Value::ColorValue(color),
                     None => Value::Keyword(value),
                 }
             }
@@ -364,6 +364,43 @@ impl Parser {
             assert!(self.consume_char() == '/');
             self.consume_whitespace();
         }
+    }
+
+    fn convert_keyword_to_color(&mut self, source: &str) -> Option<Color> {
+        if let Some(color) = self.color_map.get_color(source.as_slice()) {
+            return Some(*color);
+        }
+        if !source.starts_with("rgb") {
+            return None;
+        }
+
+        let num = source.len();
+        let input = self.consume_while(|c| c != ';');
+
+        let mut pos = input.find(|&:c: char| c == '(');
+        assert!(pos != None);
+
+        let mut data = input.slice(pos.unwrap() + 1, input.len() - 1).to_string();
+        let len = data.len();
+        data.insert(len, ',');
+
+        let mut values: [u8; 4] = [0, 0, 0, 255];
+        let mut component = data.as_slice();
+
+        for i in range(0, num) {
+            pos = component.find(|&:c: char| c == ',');
+            assert!(pos != None);
+
+            let val: Option<u8> = FromStr::from_str(component.slice(0, pos.unwrap()));
+            assert!(val != None);
+            values[i] = val.unwrap();
+
+            component = component.slice_from(pos.unwrap() + 1);
+        }
+
+        Some(Color {
+            r: values[0], g: values[1], b: values[2], a: values[3],
+        })
     }
 }
 
