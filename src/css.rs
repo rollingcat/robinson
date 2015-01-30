@@ -162,6 +162,7 @@ impl Parser {
         let mut selectors: Vec<Selector> = Vec::new();
         let mut simple;
 
+        self.consume_comment();
         while self.next_char() != '{' {
             let mut descendant: Vec<SimpleSelector> = Vec::new();
             loop {

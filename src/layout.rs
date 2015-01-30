@@ -372,9 +372,9 @@ impl<'a> LayoutBox<'a> {
             };
             if downwards {
                 float_rect.x = 0f32;
-                let height = prev.margin_box().height;
-                d.content.y += height;
-                float_rect.y += height;
+                let mut diff = prev.margin_box().max_y() - d.margin_box().y;
+                d.content.y += diff;
+                float_rect.y += diff;
             }
         }
     }
