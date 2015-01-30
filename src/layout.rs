@@ -273,7 +273,6 @@ impl<'a> LayoutBox<'a> {
 
         let d = &mut self.dimensions;
         let mut width = style.value("width").unwrap_or(auto.clone());
-        d.content.width = width.to_px().unwrap_or(width.percent_to_px(containing_block.content.width));
 
         d.padding.left = style.lookup("padding-left", "padding", &zero).to_px().unwrap();
         d.padding.right = style.lookup("padding-right", "padding", &zero).to_px().unwrap();
@@ -283,6 +282,11 @@ impl<'a> LayoutBox<'a> {
 
         d.margin.left = style.lookup("margin-left", "margin", &zero).to_px().unwrap();
         d.margin.right = style.lookup("margin-right", "margin", &zero).to_px().unwrap();
+
+        if width == auto {
+            width = Length(containing_block.content.width - d.padding.left - d.padding.right - d.border.left - d.border.right - d.margin.left - d.margin.right, Px);
+        }
+        d.content.width = width.to_px().unwrap_or(width.percent_to_px(containing_block.content.width));
     }
 
     /// Finish calculating the block's edge sizes, and position it within its containing block.
@@ -447,7 +451,8 @@ impl<'a> LayoutBox<'a> {
                         previous_left_float = Some(child.dimensions);
                         previous_right_float = None;
                     },
-                    Float::FloatRight => { child.layout_float(*d, &mut right_float_rect, previous_right_float, float_list);
+                    Float::FloatRight => {
+                        child.layout_float(*d, &mut right_float_rect, previous_right_float, float_list);
                         previous_right_float = Some(child.dimensions);
                         previous_left_float = None;
                     },
@@ -481,10 +486,21 @@ impl<'a> LayoutBox<'a> {
     }
 
     fn calculate_float_height(&mut self) {
-        self.calculate_block_height();
+        let float_value = self.get_style_node().float_value().unwrap();
+
+        match self.get_style_node().value("height") {
+            Some(value) => { self.dimensions.content.height = value.to_px().unwrap(); }
+            _ => {
+                self.dimensions.content.height +=
+                match self.float_info.left_float_max_y > self.float_info.right_float_max_y {
+                    true => self.float_info.left_float_max_y - self.dimensions.content.max_y(),
+                    false => self.float_info.right_float_max_y - self.dimensions.content.max_y(),
+                }
+            }
+        }
 
         let height = self.dimensions.margin_box().max_y();
-        match self.get_style_node().float_value().unwrap() {
+        match float_value {
             Float::FloatLeft => {
                 self.float_info.left_float_max_y = height;
                 self.float_info.right_float_max_y = 0f32;
