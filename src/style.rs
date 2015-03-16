@@ -43,6 +43,8 @@ pub enum Clear {
     ClearBoth,
 }
 
+static NONE_DISPLAY: [&'static str; 4] = ["head", "meta", "title", "style"];
+
 impl<'a> StyledNode<'a> {
     /// Return the specified value of a property if it exists, otherwise `None`.
     pub fn value(&self, name: &str) -> Option<Value> {
@@ -109,6 +111,24 @@ impl<'a> StyledNode<'a> {
             }
         }
     }
+
+    pub fn get_string_if_text_node(&self) -> Option<&str> {
+        match self.node.node_type {
+            NodeType::Text(ref string) => {
+                if !NONE_DISPLAY.contains(&self.tag_name().as_slice()) {
+                    return Some(string.as_slice());
+                };
+            },
+            _ => return None,
+        }
+        return None;
+    }
+
+    pub fn check_none_diplay_node(&mut self) {
+        if NONE_DISPLAY.contains(&self.tag_name().as_slice()) {
+            self.specified_values.insert("display".to_string(), Value::Keyword("none".to_string()));
+        };
+    }
 }
 
 /// Apply a stylesheet to an entire DOM tree, returning a StyledNode tree.
@@ -116,14 +136,17 @@ impl<'a> StyledNode<'a> {
 /// This finds only the specified values at the moment. Eventually it should be extended to find the
 /// computed values too, including inherited values.
 pub fn style_tree<'a>(root: &'a Rc<Node>, stylesheet: &'a Stylesheet) -> StyledNode<'a> {
-    StyledNode {
+    let mut new_style_node = StyledNode {
         node: root.clone(),
         specified_values: match root.node_type {
             NodeType::Element(ref elem) => specified_values(root.clone(), elem, stylesheet),
             NodeType::Text(_) => HashMap::new()
         },
         children: root.children.iter().map(|child| style_tree(child, stylesheet)).collect(),
-    }
+    };
+
+    new_style_node.check_none_diplay_node();
+    new_style_node
 }
 
 /// Apply styles to a single element, returning the specified styles.

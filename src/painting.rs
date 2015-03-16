@@ -4,10 +4,45 @@ use std::iter::{repeat, range};
 use std::num::Float;
 use color::{Color};
 
+use font_context::FontContextHandle;
+use freetype::freetype::{FT_Face, FT_New_Face, FT_Done_Face};
+use freetype::freetype::{FT_Set_Char_Size};
+use freetype::freetype::{FT_GlyphSlot};
+use freetype::freetype::{FT_Error, FT_Vector, struct_FT_Vector_};
+use freetype::freetype::{FT_Set_Transform, FT_Matrix, struct_FT_Matrix_};
+use freetype::freetype::{FT_Load_Char, FT_LOAD_RENDER};
+use freetype::freetype::{FT_Bitmap, FT_Int, FT_Set_Pixel_Sizes};
+
+use font::{Glyph, Text_Dimension, get_glyph, calculate_text_dimension, kerning_offset};
+
+use std::mem;
+use std::ptr;
+use std::slice;
+
+#[derive(Default, Show)]
 pub struct Canvas {
     pub pixels: Vec<Color>,
     pub width: usize,
     pub height: usize,
+}
+
+fn draw_text(glyph: &Glyph, x: i64, y: i64, text_info: &Text_Dimension, canvas: &mut Canvas) {
+    // let mut canvas = Canvas::new(text_info.width as usize, text_info.height as usize, Color { r: 255, g: 255, b: 255, a: 255 });
+
+    let mut src: usize = 0;
+    let mut dst: usize = (y * text_info.width as i64 + x) as usize;
+    let row_offset = (text_info.width - (*glyph).width) as usize;
+
+    for sy in range(0, (*glyph).height) {
+        for sx in range(0, (*glyph).width) {
+            canvas.pixels[dst] = (*glyph).pixelmap.pixels[src];
+            src += 1;
+            dst += 1;
+        }
+        dst += row_offset;
+    }
+
+    // canvas
 }
 
 /// Paint a tree of LayoutBoxes to an array of pixels.
@@ -17,6 +52,54 @@ pub fn paint(layout_root: &LayoutBox, bounds: Rect, background_color: Color) -> 
     for item in display_list.iter() {
         canvas.paint_item(item);
     }
+
+    //----------------------------------------------------------------------------------------
+    let handle = FontContextHandle::new();
+
+    unsafe {
+        let mut face: FT_Face = ptr::null_mut();
+        let mut error: FT_Error;
+        let filename = "/usr/share/fonts/truetype/ttf-dejavu/DejaVuSansMono.ttf".as_ptr() as *mut i8;
+        error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
+
+        if error != 0 || face.is_null() {
+            println!("failed to new face");
+            return canvas;
+        }
+
+        error = FT_Set_Pixel_Sizes(face, 0, 32);
+        if error != 0 {
+            println!("failed to set pixel size");
+            return canvas;
+        }
+
+        let slot: FT_GlyphSlot = mem::transmute((*face).glyph);
+
+        let text = "Hello";
+        let text_dimension = calculate_text_dimension(text.as_slice(), &face);
+
+        let mut pen = struct_FT_Vector_ { x: 0, y: 0 };
+        let mut c: char;
+        let mut pc: char = 0 as char;
+
+        let mut text_canvas = Canvas::new(text_dimension.width as usize, text_dimension.height as usize, Color { r: 0, g: 0, b: 0, a: 255 });
+
+        for c in text.chars() {
+            let glyph = get_glyph(c, &face);
+
+            pen.x += kerning_offset(c, pc, &face) as i64;
+            pen.y = (text_dimension.height - glyph.ascent - text_dimension.baseline) as i64;
+
+            draw_text(&glyph, pen.x, pen.y, &text_dimension, &mut text_canvas);
+
+            pen.x += glyph.advance_width as i64;
+
+            pc = c;
+        }
+
+        canvas.paint_text(&text_canvas);
+    }
+    //----------------------------------------------------------------------------------------
     return canvas;
 }
 
@@ -110,7 +193,7 @@ fn get_color(layout_box: &LayoutBox, name: &str) -> Option<Color> {
 
 impl Canvas {
     /// Create a blank canvas
-    fn new(width: usize, height: usize, background_color: Color) -> Canvas {
+    pub fn new(width: usize, height: usize, background_color: Color) -> Canvas {
         return Canvas {
             pixels: repeat(background_color).take(width * height).collect(),
             width: width,
@@ -133,6 +216,14 @@ impl Canvas {
                         self.pixels[y * self.width + x] = color;
                     }
                 }
+            }
+        }
+    }
+
+    fn paint_text(&mut self, text_image: &Canvas) {
+        for y in range(0, text_image.height) {
+            for x in range(0, text_image.width) {
+                self.pixels[y * self.width + x] = text_image.pixels[y * text_image.width + x];
             }
         }
     }

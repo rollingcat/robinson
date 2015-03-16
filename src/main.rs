@@ -2,6 +2,8 @@
 
 extern crate getopts;
 extern crate image;
+extern crate freetype;
+extern crate libc;
 
 use getopts::{optopt,getopts};
 use std::default::Default;
@@ -17,6 +19,8 @@ mod style;
 mod painting;
 mod color;
 mod shorthand;
+mod font_context;
+mod font;
 
 fn main() {
     // Parse command-line options:
@@ -50,12 +54,15 @@ fn main() {
 
     // Parsing and rendering:
     let root_node = html::parse(html);
-    // dom::show_all(&root_node, 1);
+    dom::show_all(&root_node, 1);
+    println!("=================================================");
     let css_string = dom::find_style(&root_node);
     let stylesheet = css::parse(css_string);
     // css::show(stylesheet);
+    // println!("=================================================");
     let style_root = style::style_tree(&root_node, &stylesheet);
-    style::show(&style_root, 1);
+    // style::show(&style_root, 1);
+    // println!("=================================================");
     let layout_root = layout::layout_tree(&style_root, initial_containing_block);
     layout::show(&layout_root, 1);
 

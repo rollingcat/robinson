@@ -15,3 +15,9 @@ getopts = "0.1.4"
 
 [dependencies.image]
 git = "https://github.com/PistonDevelopers/image"
+
+[dependencies.freetype]
+git = "https://github.com/servo/rust-freetype"
+
+[dependencies]
+libc = "*"
