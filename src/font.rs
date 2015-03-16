@@ -35,7 +35,7 @@ pub struct Text_Dimension {
     // unsigned char *outpuffer;
 }
 
-pub fn get_glyph(character: char, face: &FT_Face) -> Glyph {
+pub fn get_glyph(character: char, face: &FT_Face, bBitmap: bool) -> Glyph {
     unsafe {
         let error = FT_Load_Char(*face, character as u64, FT_LOAD_RENDER);
         if error != 0 {
@@ -43,7 +43,7 @@ pub fn get_glyph(character: char, face: &FT_Face) -> Glyph {
         }
 
         let slot: FT_GlyphSlot = mem::transmute((**face).glyph);
-        return convert_glyph(&slot);
+        return convert_glyph(&slot, bBitmap);
     }
 }
 
@@ -65,7 +65,7 @@ pub fn calculate_text_dimension(text: &str, face: &FT_Face) -> Text_Dimension {
     prev_character = 0 as char;
 
     for character in text.chars() {
-        let glyph = get_glyph(character, face);
+        let glyph = get_glyph(character, face, false);
         if (max_ascent < glyph.ascent) {
             max_ascent = glyph.ascent;
         }
@@ -104,10 +104,12 @@ pub fn kerning_offset(c: char, pc: char, face: &FT_Face) -> i32 {
     return kerning.x as i32 / 64;
 }
 
-fn convert_glyph(slot: &FT_GlyphSlot) -> Glyph {
+fn convert_glyph(slot: &FT_GlyphSlot, bBitmap: bool) -> Glyph {
     let mut glyph_data: Glyph = Default::default();
     unsafe {
-        glyph_data.pixelmap = draw_char(&(**slot).bitmap);
+        if bBitmap {
+            glyph_data.pixelmap = draw_char(&(**slot).bitmap);
+        }
         glyph_data.width = (**slot).bitmap.width;
         glyph_data.height = (**slot).bitmap.rows;
         glyph_data.top = (**slot).bitmap_top;
@@ -137,7 +139,7 @@ fn convert_glyph(slot: &FT_GlyphSlot) -> Glyph {
 }
 
 fn draw_char(bitmap: &FT_Bitmap) -> Canvas {
-    let mut canvas = Canvas::new(bitmap.width as usize, bitmap.rows as usize, Color { r: 255, g: 255, b: 255, a: 255 });
+    let mut canvas = Canvas::new(bitmap.width as usize, bitmap.rows as usize, Color { r: 0, g: 0, b: 0, a: 0 });
 
     unsafe {
         let s: &mut [u8] = slice::from_raw_mut_buf(&bitmap.buffer, (bitmap.width * bitmap.rows) as usize);
@@ -147,9 +149,7 @@ fn draw_char(bitmap: &FT_Bitmap) -> Canvas {
                 let idx = (y * bitmap.width + x) as usize;
                 let value = s[idx];
 
-                canvas.pixels[idx].r = value;
-                canvas.pixels[idx].g = value;
-                canvas.pixels[idx].b = value;
+                canvas.pixels[idx].a = value;
             }
         }
     }

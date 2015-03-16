@@ -26,25 +26,6 @@ pub struct Canvas {
     pub height: usize,
 }
 
-fn draw_text(glyph: &Glyph, x: i64, y: i64, text_info: &Text_Dimension, canvas: &mut Canvas) {
-    // let mut canvas = Canvas::new(text_info.width as usize, text_info.height as usize, Color { r: 255, g: 255, b: 255, a: 255 });
-
-    let mut src: usize = 0;
-    let mut dst: usize = (y * text_info.width as i64 + x) as usize;
-    let row_offset = (text_info.width - (*glyph).width) as usize;
-
-    for sy in range(0, (*glyph).height) {
-        for sx in range(0, (*glyph).width) {
-            canvas.pixels[dst] = (*glyph).pixelmap.pixels[src];
-            src += 1;
-            dst += 1;
-        }
-        dst += row_offset;
-    }
-
-    // canvas
-}
-
 /// Paint a tree of LayoutBoxes to an array of pixels.
 pub fn paint(layout_root: &LayoutBox, bounds: Rect, background_color: Color) -> Canvas {
     let display_list = build_display_list(layout_root);
@@ -52,60 +33,13 @@ pub fn paint(layout_root: &LayoutBox, bounds: Rect, background_color: Color) -> 
     for item in display_list.iter() {
         canvas.paint_item(item);
     }
-
-    //----------------------------------------------------------------------------------------
-    let handle = FontContextHandle::new();
-
-    unsafe {
-        let mut face: FT_Face = ptr::null_mut();
-        let mut error: FT_Error;
-        let filename = "/usr/share/fonts/truetype/ttf-dejavu/DejaVuSansMono.ttf".as_ptr() as *mut i8;
-        error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
-
-        if error != 0 || face.is_null() {
-            println!("failed to new face");
-            return canvas;
-        }
-
-        error = FT_Set_Pixel_Sizes(face, 0, 32);
-        if error != 0 {
-            println!("failed to set pixel size");
-            return canvas;
-        }
-
-        let slot: FT_GlyphSlot = mem::transmute((*face).glyph);
-
-        let text = "Hello";
-        let text_dimension = calculate_text_dimension(text.as_slice(), &face);
-
-        let mut pen = struct_FT_Vector_ { x: 0, y: 0 };
-        let mut c: char;
-        let mut pc: char = 0 as char;
-
-        let mut text_canvas = Canvas::new(text_dimension.width as usize, text_dimension.height as usize, Color { r: 0, g: 0, b: 0, a: 255 });
-
-        for c in text.chars() {
-            let glyph = get_glyph(c, &face);
-
-            pen.x += kerning_offset(c, pc, &face) as i64;
-            pen.y = (text_dimension.height - glyph.ascent - text_dimension.baseline) as i64;
-
-            draw_text(&glyph, pen.x, pen.y, &text_dimension, &mut text_canvas);
-
-            pen.x += glyph.advance_width as i64;
-
-            pc = c;
-        }
-
-        canvas.paint_text(&text_canvas);
-    }
-    //----------------------------------------------------------------------------------------
     return canvas;
 }
 
 #[derive(Show)]
 enum DisplayCommand {
     SolidColor(Color, Rect),
+    Text(String, Rect),
 }
 
 type DisplayList = Vec<DisplayCommand>;
@@ -119,6 +53,8 @@ fn build_display_list(layout_root: &LayoutBox) -> DisplayList {
 fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox) {
     render_background(list, layout_box);
     render_borders(list, layout_box);
+    render_text(list, layout_box);
+
     for child in layout_box.children.iter() {
         match child.box_type {
             FloatNode(_) => continue,
@@ -180,6 +116,12 @@ fn render_borders(list: &mut DisplayList, layout_box: &LayoutBox) {
     }));
 }
 
+fn render_text(list: &mut DisplayList, layout_box: &LayoutBox) {
+    if let Some(text) = layout_box.get_style_node().get_string_if_text_node() {
+        list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content));
+    }
+}
+
 /// Return the specified color for CSS property `name`, or None if no color was specified.
 fn get_color(layout_box: &LayoutBox, name: &str) -> Option<Color> {
     match layout_box.box_type {
@@ -216,15 +158,83 @@ impl Canvas {
                         self.pixels[y * self.width + x] = color;
                     }
                 }
+            },
+            &DisplayCommand::Text(ref string, rect) => {
+                self.paint_text(string.as_slice(), rect);
             }
         }
     }
 
-    fn paint_text(&mut self, text_image: &Canvas) {
-        for y in range(0, text_image.height) {
-            for x in range(0, text_image.width) {
-                self.pixels[y * self.width + x] = text_image.pixels[y * text_image.width + x];
+    fn paint_text(&mut self, string: &str, rect: Rect) {
+
+        let handle = FontContextHandle::new();
+        let start_idx = rect.y as usize * self.width + rect.x as usize;
+
+        unsafe {
+            let mut face: FT_Face = ptr::null_mut();
+            let mut error: FT_Error;
+            let filename = "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf".as_ptr() as *mut i8;
+            error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
+
+            if error != 0 || face.is_null() {
+                println!("failed to new face");
             }
+
+            error = FT_Set_Pixel_Sizes(face, 0, 10);
+            if error != 0 {
+                println!("failed to set pixel size");
+            }
+
+            let slot: FT_GlyphSlot = mem::transmute((*face).glyph);
+
+            let text_dimension = calculate_text_dimension(string.as_slice(), &face);
+
+            let mut pen = struct_FT_Vector_ { x: 0, y: 0 };
+            let mut c: char;
+            let mut pc: char = 0 as char;
+
+            let mut text_canvas = Canvas::new(text_dimension.width as usize, text_dimension.height as usize, Color { r: 0, g: 0, b: 0, a: 0 });
+
+            for c in string.chars() {
+                let glyph = get_glyph(c, &face, true);
+
+                pen.x += kerning_offset(c, pc, &face) as i64;
+                pen.y = (text_dimension.height - glyph.ascent - text_dimension.baseline) as i64;
+
+                text_canvas.paint_char(&glyph, pen.x, pen.y, &text_dimension);
+
+                pen.x += glyph.advance_width as i64;
+
+                pc = c;
+            }
+
+            for y in range(0, text_canvas.height) {
+                for x in range(0, text_canvas.width) {
+                    let src_col = text_canvas.pixels[y * text_canvas.width + x];
+                    let dst_col = self.pixels[start_idx + y * self.width + x];
+
+                    let dst: &mut Color = &mut self.pixels[start_idx + y * self.width + x];
+
+                    dst.r = ((dst_col.r as f32 * (255 - src_col.a) as f32 / 255.0) + (src_col.r as f32 * src_col.a as f32 / 255.0)) as u8;
+                    dst.g = ((dst_col.g as f32 * (255 - src_col.a) as f32 / 255.0) + (src_col.g as f32 * src_col.a as f32 / 255.0)) as u8;
+                    dst.b = ((dst_col.b as f32 * (255 - src_col.a) as f32 / 255.0) + (src_col.b as f32 * src_col.a as f32 / 255.0)) as u8;
+                }
+            }
+        }
+    }
+
+    fn paint_char(&mut self, glyph: &Glyph, x: i64, y: i64, text_info: &Text_Dimension) {
+        let mut src: usize = 0;
+        let mut dst: usize = (y * text_info.width as i64 + x) as usize;
+        let row_offset = (text_info.width - (*glyph).width) as usize;
+
+        for sy in range(0, (*glyph).height) {
+            for sx in range(0, (*glyph).width) {
+                self.pixels[dst] = (*glyph).pixelmap.pixels[src];
+                src += 1;
+                dst += 1;
+            }
+            dst += row_offset;
         }
     }
 }

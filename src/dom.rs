@@ -33,7 +33,7 @@ pub struct ElementData {
 
 // Constructor functions for convenience:
 pub fn text(data: String) -> Rc<Node> {
-    Rc::new(Node { parent: RefCell::new(Vec::new()), children: vec![], node_type: NodeType::Text(data) })
+    Rc::new(Node { parent: RefCell::new(Vec::new()), children: vec![], node_type: NodeType::Text(data.trim().to_string()) })
 }
 
 pub fn elem(name: String, attrs: AttrMap, children: Vec<Rc<Node>>) -> Node {

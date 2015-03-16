@@ -12,7 +12,7 @@ pub use self::BoxType::{AnonymousBlock, InlineNode, BlockNode, FloatNode};
 
 use font_context::FontContextHandle;
 use freetype::freetype::{FT_Face, FT_New_Face, FT_Done_Face, FT_Error};
-use freetype::freetype::{FT_Get_Char_Index, FT_Set_Char_Size, FT_Load_Glyph, FT_GlyphSlot};
+use freetype::freetype::{FT_Get_Char_Index, FT_Set_Pixel_Sizes, FT_Load_Glyph, FT_GlyphSlot};
 use freetype::freetype::{FT_UInt, FT_ULong, FT_Vector, struct_FT_Vector_};
 use freetype::freetype::{FT_Load_Char, FT_LOAD_RENDER};
 use freetype::freetype::{FT_Get_Kerning, FT_KERNING_DEFAULT};
@@ -85,7 +85,7 @@ impl<'a> LayoutBox<'a> {
         }
     }
 
-    fn get_style_node(&self) -> &'a StyledNode<'a> {
+    pub fn get_style_node(&self) -> &'a StyledNode<'a> {
         match self.box_type {
             BlockNode(node) => node,
             InlineNode(node) => node,
@@ -93,22 +93,6 @@ impl<'a> LayoutBox<'a> {
             AnonymousBlock => panic!("Anonymous block box has no style node")
         }
     }
-}
-
-pub fn float_to_fixed(before: i32, f: f32) -> i32 {
-    ((1i32 << before as u32) as f32 * f) as i32
-}
-
-pub fn fixed_to_float(before: i32, f: i32) -> f32 {
-    f as f32 * 1.0f32 / ((1i32 << before as u32) as f32)
-}
-
-fn float_to_fixed_ft(f: f32) -> i32 {
-    float_to_fixed(6, f)
-}
-
-fn fixed_to_float_ft(f: i32) -> f32 {
-    fixed_to_float(6, f)
 }
 
 /// Transform a style tree into a layout tree.
@@ -509,13 +493,12 @@ impl<'a> LayoutBox<'a> {
         let d = &mut self.dimensions;
         let handle = FontContextHandle::new();
 
-        // let words = tokenize(text);
         let words: Vec<&str> = text.split(' ').collect();
 
         unsafe {
             let mut face: FT_Face = ptr::null_mut();
             let mut error: FT_Error;
-            let filename = "/usr/share/fonts/truetype/ttf-dejavu/DejaVuSansMono.ttf".as_ptr() as *mut i8;
+            let filename = "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf".as_ptr() as *mut i8;
             error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
 
             if error != 0 || face.is_null() {
@@ -523,40 +506,42 @@ impl<'a> LayoutBox<'a> {
                 return 0.0;
             }
 
-            error = FT_Set_Char_Size(face, 50 * 64, 0, 100, 0);
+            error = FT_Set_Pixel_Sizes(face, 0, 10);
             if error != 0 {
-                println!("failed to set char size");
+                println!("failed to set pixel size");
                 return 0.0;
             }
 
-            let text_dimension = calculate_text_dimension(text, &face);
-            println!("&&&&&&&&&&&&&&&&&&&&&&&&&");
-            println!("{:?}", text_dimension);
+            let space_width = calculate_text_dimension(" ", &face).width;
 
-            let space_width = calculate_word_width(" ", &face);
-
-            let mut text_width = 0.0;
-            let mut text_height = fixed_to_float_ft(((*face).bbox.yMax - (*face).bbox.yMin) as i32);
-            println!("text_height: {}", text_height);
+            let mut text_width = 0;
+            let mut text_height = 0;
+            let mut max_text_height = 0;
             let mut line_break = false;
 
             for word in words.iter() {
-                let word_width = calculate_word_width(*word, &face);
-                if (text_width + word_width) >= d.content.width {
+                let word_dimension = calculate_text_dimension(*word, &face);
+
+                if word_dimension.height > max_text_height {
+                    max_text_height = word_dimension.height;
+                }
+
+                if (text_width + word_dimension.width) >= d.content.width as i32 {
                     line_break = true;
-                    text_height += text_height;
-                    text_width = word_width;
+                    text_height += max_text_height;
+                    text_width = word_dimension.width;
                 } else {
-                    text_width += (word_width + space_width);
+                    text_width += (word_dimension.width + space_width);
                 }
             }
 
             d.content.height = text_height as f32;
             if line_break == false {
-                d.content.width = text_width;
+                d.content.width = text_width as f32;
+                d.content.height = max_text_height as f32;
+            } else {
+                d.content.height += max_text_height as f32;
             }
-
-            println!("calculate_text_size: {} x {}", d.content.width, d.content.height);
         }
 
         0.0
@@ -723,34 +708,4 @@ fn add_tag_name(info: &mut String, node: &StyledNode) {
     info.push('<');
     info.push_str(node.tag_name().as_slice());
     info.push('>'); info.push(' ');
-}
-
-fn calculate_word_width(word: &str, face: &FT_Face) -> f32 {
-    let mut word_width = 0.0;
-
-    unsafe {
-        for ch in word.chars() {
-            get_glyph(ch, face);
-
-            let glyph_idx = FT_Get_Char_Index(*face, ch as FT_ULong);
-            if glyph_idx == 0 as FT_UInt {
-                println!("Invalid char: {}", ch);
-                return 0.0;
-            }
-
-            let error = FT_Load_Glyph(*face, glyph_idx as FT_UInt, 0);
-            if error != 0 {
-                println!("failed to load glyph");
-                return 0.0;
-            }
-
-            let slot: FT_GlyphSlot = mem::transmute((**face).glyph);
-
-            let advance = (*slot).metrics.horiAdvance;
-            word_width += fixed_to_float_ft(advance as i32);
-        }
-    }
-
-    println!("calculate_word_width: {} -> {}", word, word_width);
-    word_width
 }
