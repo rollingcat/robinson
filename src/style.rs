@@ -44,6 +44,7 @@ pub enum Clear {
 }
 
 static NONE_DISPLAY: [&'static str; 4] = ["head", "meta", "title", "style"];
+static DEFAULT_BLOCK: [&'static str; 10] = ["address", "blockquote", "dd", "div", "dl", "form", "p", "ul", "html", "body"];
 
 impl<'a> StyledNode<'a> {
     /// Return the specified value of a property if it exists, otherwise `None`.
@@ -66,8 +67,15 @@ impl<'a> StyledNode<'a> {
                 "none" => Display::None,
                 _ => Display::Inline
             },
-            _ => Display::Block
+            _ => self.default_display()
         }
+    }
+
+    fn default_display(&self) -> Display {
+        if DEFAULT_BLOCK.contains(&self.tag_name().as_slice()) {
+            return Display::Block;
+        }
+        return Display::Inline;
     }
 
     pub fn float_value(&self) -> Option<Float> {

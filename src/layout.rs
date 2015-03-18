@@ -141,12 +141,12 @@ impl<'a> LayoutBox<'a> {
     fn layout(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
         match self.box_type {
             BlockNode(_) => self.layout_block(containing_block, float_list),
-            InlineNode(_) => {} // TODO
+            InlineNode(_) => self.layout_inline(containing_block, float_list),
             FloatNode(_) => {
                 let mut rect: Rect = Default::default();
                 self.layout_float(containing_block, &mut rect, None, float_list)
             },
-            AnonymousBlock => {} // TODO
+            AnonymousBlock => self.layout_anonymous(containing_block, float_list),
         }
     }
 
@@ -188,6 +188,34 @@ impl<'a> LayoutBox<'a> {
 
         float_list.push((self.get_style_node().float_value().unwrap(), self.dimensions));
     }
+
+    fn layout_inline(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
+        // Child width can depend on parent width, so we need to calculate this box's width before
+        // laying out its children.
+        self.calculate_block_width(containing_block);
+
+        // Determine where the box is located within its container.
+        self.calculate_block_position(containing_block);
+
+        // Recursively lay out the children of this box.
+        self.layout_block_children(float_list);
+
+        // Parent height can depend on child height, so `calculate_height` must be called after the
+        // children are laid out.
+        self.calculate_block_height();
+    }
+
+    fn layout_anonymous(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
+        {
+            let d = &mut self.dimensions;
+            d.content.width = containing_block.content.width;
+            d.content.x = containing_block.content.x;
+            d.content.y = containing_block.content.y;
+        }
+
+        self.layout_block_children(float_list);
+    }
+
 
     /// Calculate the width of a block-level non-replaced element in normal flow.
     ///
@@ -506,6 +534,7 @@ impl<'a> LayoutBox<'a> {
                 return 0.0;
             }
 
+            // error = FT_Set_Char_Size(face, 50 * 64, 0, 100, 0);
             error = FT_Set_Pixel_Sizes(face, 0, 10);
             if error != 0 {
                 println!("failed to set pixel size");
@@ -595,6 +624,12 @@ impl<'a> LayoutBox<'a> {
 
     fn calculate_clear_height(&self, float_info: &FloatInfo, current_max_y: f32) -> f32 {
         let mut clear_height = 0f32;
+
+        match self.box_type {
+            AnonymousBlock => return clear_height,
+            _ => {}
+        }
+
         if let Some(clear_value) = self.get_style_node().clear_value() {
             match clear_value {
                 Clear::ClearLeft =>

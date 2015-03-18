@@ -117,8 +117,10 @@ fn render_borders(list: &mut DisplayList, layout_box: &LayoutBox) {
 }
 
 fn render_text(list: &mut DisplayList, layout_box: &LayoutBox) {
-    if let Some(text) = layout_box.get_style_node().get_string_if_text_node() {
-        list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content));
+    if let InlineNode(_) = layout_box.box_type {
+        if let Some(text) = layout_box.get_style_node().get_string_if_text_node() {
+            list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content));
+        }
     }
 }
 
@@ -166,7 +168,6 @@ impl Canvas {
     }
 
     fn paint_text(&mut self, string: &str, rect: Rect) {
-
         let handle = FontContextHandle::new();
         let start_idx = rect.y as usize * self.width + rect.x as usize;
 
