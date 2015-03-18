@@ -44,7 +44,8 @@ pub enum Clear {
 }
 
 static NONE_DISPLAY: [&'static str; 4] = ["head", "meta", "title", "style"];
-static DEFAULT_BLOCK: [&'static str; 10] = ["address", "blockquote", "dd", "div", "dl", "form", "p", "ul", "html", "body"];
+static DEFAULT_BLOCK: [&'static str; 11] =
+["address", "blockquote", "dd", "div", "dl", "form", "p", "ul", "h1", "html", "body"];
 
 impl<'a> StyledNode<'a> {
     /// Return the specified value of a property if it exists, otherwise `None`.
@@ -114,7 +115,11 @@ impl<'a> StyledNode<'a> {
             NodeType::Element(ref data) => data.tag_name.clone(),
             NodeType::Text(ref string) => {
                 let mut text = "text: ".to_string();
-                text.push_str(string.slice(0, 3));
+                if string.len() > 3 {
+                    text.push_str(string.slice(0, 3));
+                } else {
+                    text.push_str(string.as_slice());
+                }
                 text
             }
         }
