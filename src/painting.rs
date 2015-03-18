@@ -186,8 +186,6 @@ impl Canvas {
                 println!("failed to set pixel size");
             }
 
-            let slot: FT_GlyphSlot = mem::transmute((*face).glyph);
-
             let text_dimension = calculate_text_dimension(string.as_slice(), &face);
 
             let mut pen = struct_FT_Vector_ { x: 0, y: 0 };
@@ -227,6 +225,8 @@ impl Canvas {
     fn paint_char(&mut self, glyph: &Glyph, x: i64, y: i64, text_info: &Text_Dimension) {
         let mut src: usize = 0;
         let mut dst: usize = (y * text_info.width as i64 + x) as usize;
+        dst += glyph.bearing_x as usize;
+
         let row_offset = (text_info.width - (*glyph).width) as usize;
 
         for sy in range(0, (*glyph).height) {

@@ -24,6 +24,7 @@ pub struct Glyph {
     pub descent: i32,
     pub ascent: i32,
     pub advance_width: i32,
+    pub bearing_x: i32,
     pub pixelmap: Canvas
 }
 
@@ -114,6 +115,7 @@ fn convert_glyph(slot: &FT_GlyphSlot, bBitmap: bool) -> Glyph {
         glyph_data.height = (**slot).bitmap.rows;
         glyph_data.top = (**slot).bitmap_top;
         glyph_data.advance_width = (**slot).advance.x as i32 / 64;
+        glyph_data.bearing_x = (**slot).metrics.horiBearingX as i32 / 64;
     }
 
     let mut descent = 0;
