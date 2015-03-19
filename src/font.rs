@@ -16,6 +16,15 @@ use std::mem;
 use std::ptr;
 use std::slice;
 
+#[derive(Show, Clone, Default)]
+pub struct Font_Info {
+    pub size: i32,
+    pub line_height: i32,
+    pub color: Color,
+}
+
+impl Copy for Font_Info {}
+
 #[derive(Default, Show)]
 pub struct Glyph {
     pub top: i32,

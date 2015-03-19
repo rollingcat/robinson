@@ -13,11 +13,12 @@ use freetype::freetype::{FT_Set_Transform, FT_Matrix, struct_FT_Matrix_};
 use freetype::freetype::{FT_Load_Char, FT_LOAD_RENDER};
 use freetype::freetype::{FT_Bitmap, FT_Int, FT_Set_Pixel_Sizes};
 
-use font::{Glyph, Text_Dimension, get_glyph, calculate_text_dimension, kerning_offset};
+use font::{Font_Info, Glyph, Text_Dimension, get_glyph, calculate_text_dimension, kerning_offset};
 
 use std::mem;
 use std::ptr;
 use std::slice;
+use std::default::Default;
 
 #[derive(Default, Show)]
 pub struct Canvas {
@@ -39,33 +40,52 @@ pub fn paint(layout_root: &LayoutBox, bounds: Rect, background_color: Color) -> 
 #[derive(Show)]
 enum DisplayCommand {
     SolidColor(Color, Rect),
-    Text(String, Rect),
+    Text(String, Rect, Font_Info),
 }
 
 type DisplayList = Vec<DisplayCommand>;
 
 fn build_display_list(layout_root: &LayoutBox) -> DisplayList {
     let mut list = Vec::new();
-    render_layout_box(&mut list, layout_root);
+    let mut font_info : Font_Info = Default::default();
+    render_layout_box(&mut list, layout_root, &mut font_info);
     return list;
 }
 
-fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox) {
+fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox, font_info: &mut Font_Info) {
     render_background(list, layout_box);
     render_borders(list, layout_box);
-    render_text(list, layout_box);
+    update_font_info(layout_box, font_info);
+    render_text(list, layout_box, font_info);
 
     for child in layout_box.children.iter() {
         match child.box_type {
             FloatNode(_) => continue,
-            _ => render_layout_box(list, child),
+            _ => render_layout_box(list, child, &mut font_info.clone()),
         };
     }
 
     for child in layout_box.children.iter() {
         if let FloatNode(style_node) = child.box_type {
-            render_layout_box(list, child);
+            render_layout_box(list, child, &mut font_info.clone());
         }
+    }
+}
+
+fn update_font_info(layout_box: &LayoutBox, font_info: &mut Font_Info) {
+    match layout_box.box_type {
+        BlockNode(style) | InlineNode(style) | FloatNode(style) => {
+            if let Some(Value::ColorValue(color)) = style.value("color") {
+                font_info.color = color;
+            }
+            if let Some(val) = style.value("font-size") {
+                font_info.size = val.to_px().unwrap() as i32;
+            }
+            if let Some(val) = style.value("line-height") {
+                font_info.line_height = val.to_px().unwrap() as i32;
+            }
+        },
+        AnonymousBlock => {}
     }
 }
 
@@ -116,10 +136,10 @@ fn render_borders(list: &mut DisplayList, layout_box: &LayoutBox) {
     }));
 }
 
-fn render_text(list: &mut DisplayList, layout_box: &LayoutBox) {
+fn render_text(list: &mut DisplayList, layout_box: &LayoutBox, font_info: &Font_Info) {
     if let InlineNode(_) = layout_box.box_type {
         if let Some(text) = layout_box.get_style_node().get_string_if_text_node() {
-            list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content));
+            list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content, font_info.clone()));
         }
     }
 }
@@ -161,13 +181,13 @@ impl Canvas {
                     }
                 }
             },
-            &DisplayCommand::Text(ref string, rect) => {
-                self.paint_text(string.as_slice(), rect);
+            &DisplayCommand::Text(ref string, ref rect, ref font_info) => {
+                self.paint_text(string.as_slice(), rect, font_info);
             }
         }
     }
 
-    fn paint_text(&mut self, string: &str, rect: Rect) {
+    fn paint_text(&mut self, string: &str, rect: &Rect, font_info: &Font_Info) {
         let handle = FontContextHandle::new();
         let start_idx = rect.y as usize * self.width + rect.x as usize;
 
@@ -214,9 +234,9 @@ impl Canvas {
 
                     let dst: &mut Color = &mut self.pixels[start_idx + y * self.width + x];
 
-                    dst.r = ((dst_col.r as f32 * (255 - src_col.a) as f32 / 255.0) + (src_col.r as f32 * src_col.a as f32 / 255.0)) as u8;
-                    dst.g = ((dst_col.g as f32 * (255 - src_col.a) as f32 / 255.0) + (src_col.g as f32 * src_col.a as f32 / 255.0)) as u8;
-                    dst.b = ((dst_col.b as f32 * (255 - src_col.a) as f32 / 255.0) + (src_col.b as f32 * src_col.a as f32 / 255.0)) as u8;
+                    dst.r = ((dst_col.r as f32 * (255 - src_col.a) as f32 / 255.0) + (font_info.color.r as f32 * src_col.a as f32 / 255.0)) as u8;
+                    dst.g = ((dst_col.g as f32 * (255 - src_col.a) as f32 / 255.0) + (font_info.color.g as f32 * src_col.a as f32 / 255.0)) as u8;
+                    dst.b = ((dst_col.b as f32 * (255 - src_col.a) as f32 / 255.0) + (font_info.color.b as f32 * src_col.a as f32 / 255.0)) as u8;
                 }
             }
         }
