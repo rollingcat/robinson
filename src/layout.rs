@@ -8,7 +8,7 @@ use std::iter::AdditiveIterator; // for `sum`
 
 use dom::{NodeType};
 
-pub use self::BoxType::{AnonymousBlock, InlineNode, BlockNode, FloatNode};
+pub use self::BoxType::{AnonymousBlock, InlineNode, BlockNode, FloatNode, TextNode};
 
 use font_context::FontContextHandle;
 use freetype::freetype::{FT_Face, FT_New_Face, FT_Done_Face, FT_Error};
@@ -24,7 +24,7 @@ use std::mem;
 
 // CSS box model. All sizes are in px.
 
-#[derive(Default, Show)]
+#[derive(Default, Show, Clone)]
 pub struct Rect {
     pub x: f32,
     pub y: f32,
@@ -66,6 +66,7 @@ pub enum BoxType<'a> {
     BlockNode(&'a StyledNode<'a>),
     InlineNode(&'a StyledNode<'a>),
     FloatNode(&'a StyledNode<'a>),
+    TextNode(String),
     AnonymousBlock,
 }
 
@@ -90,6 +91,7 @@ impl<'a> LayoutBox<'a> {
             BlockNode(node) => node,
             InlineNode(node) => node,
             FloatNode(node) => node,
+            TextNode(_) => panic!("text node box has no style node"),
             AnonymousBlock => panic!("Anonymous block box has no style node")
         }
     }
@@ -104,7 +106,8 @@ pub fn layout_tree<'a>(node: &'a StyledNode<'a>, mut containing_block: Dimension
     let mut root_box = build_layout_tree(node);
 
     let mut float_list: Vec<(Float, Dimensions)> = Vec::new();
-    root_box.layout(containing_block, &mut float_list);
+    let mut previous_inline: Option<(i32, i32)> = None;
+    root_box.layout(containing_block, &mut float_list, &mut previous_inline);
     return root_box;
 }
 
@@ -138,20 +141,21 @@ fn create_layout_box<'a>(style_node: &'a StyledNode<'a>) -> LayoutBox<'a> {
 
 impl<'a> LayoutBox<'a> {
     /// Lay out a box and its descendants.
-    fn layout(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
+    fn layout(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>, previous_inline: &mut Option<(i32, i32)>) {
         match self.box_type {
-            BlockNode(_) => self.layout_block(containing_block, float_list),
-            InlineNode(_) => self.layout_inline(containing_block, float_list),
+            BlockNode(_) => self.layout_block(containing_block, float_list, previous_inline),
+            InlineNode(_) => self.layout_inline(containing_block, float_list, previous_inline),
             FloatNode(_) => {
                 let mut rect: Rect = Default::default();
-                self.layout_float(containing_block, &mut rect, None, float_list)
+                self.layout_float(containing_block, &mut rect, None, float_list, previous_inline)
             },
-            AnonymousBlock => self.layout_anonymous(containing_block, float_list),
+            TextNode(_) => { println!("what what what what"); self.layout_text(containing_block, previous_inline)},
+            AnonymousBlock => self.layout_anonymous(containing_block, float_list, previous_inline),
         }
     }
 
     /// Lay out a block-level element and its descendants.
-    fn layout_block(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
+    fn layout_block(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>, previous_inline: &mut Option<(i32, i32)>) {
         // Child width can depend on parent width, so we need to calculate this box's width before
         // laying out its children.
         self.calculate_block_width(containing_block);
@@ -160,14 +164,18 @@ impl<'a> LayoutBox<'a> {
         self.calculate_block_position(containing_block);
 
         // Recursively lay out the children of this box.
-        self.layout_block_children(float_list);
+        self.layout_block_children(float_list, previous_inline);
 
         // Parent height can depend on child height, so `calculate_height` must be called after the
         // children are laid out.
         self.calculate_block_height();
     }
 
-    fn layout_float(&mut self, containing_block: Dimensions, float_rect: &mut Rect, previous_float: Option<Dimensions>, float_list: &mut Vec<(Float, Dimensions)>) {
+    fn layout_float(&mut self, containing_block: Dimensions,
+                    float_rect: &mut Rect,
+                    previous_float: Option<Dimensions>,
+                    float_list: &mut Vec<(Float, Dimensions)>,
+                    previous_inline: &mut Option<(i32, i32)>) {
         self.calculate_float_width(containing_block);
 
         self.calculate_float_position(containing_block, float_rect);
@@ -182,30 +190,30 @@ impl<'a> LayoutBox<'a> {
             }
         }
 
-        self.layout_block_children(float_list);
+        self.layout_block_children(float_list, previous_inline);
 
         self.calculate_float_height();
 
         float_list.push((self.get_style_node().float_value().unwrap(), self.dimensions));
     }
 
-    fn layout_inline(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
+    fn layout_inline(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>, previous_inline: &mut Option<(i32, i32)>) {
         // Child width can depend on parent width, so we need to calculate this box's width before
         // laying out its children.
-        self.calculate_block_width(containing_block);
+        self.calculate_inline_width(containing_block, previous_inline);
 
         // Determine where the box is located within its container.
-        self.calculate_block_position(containing_block);
+        self.calculate_inline_position(containing_block, previous_inline);
 
         // Recursively lay out the children of this box.
-        self.layout_block_children(float_list);
+        self.layout_block_children(float_list, previous_inline);
 
         // Parent height can depend on child height, so `calculate_height` must be called after the
         // children are laid out.
         self.calculate_block_height();
     }
 
-    fn layout_anonymous(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>) {
+    fn layout_anonymous(&mut self, containing_block: Dimensions, float_list: &mut Vec<(Float, Dimensions)>, previous_inline: &mut Option<(i32, i32)>) {
         {
             let d = &mut self.dimensions;
             d.content.width = containing_block.content.width;
@@ -213,7 +221,8 @@ impl<'a> LayoutBox<'a> {
             d.content.y = containing_block.content.y;
         }
 
-        self.layout_block_children(float_list);
+        println!("layout_anonymous");
+        self.layout_block_children(float_list, previous_inline);
     }
 
 
@@ -331,6 +340,46 @@ impl<'a> LayoutBox<'a> {
         d.content.width = width.to_px().unwrap_or(width.percent_to_px(containing_block.content.width));
     }
 
+    fn calculate_inline_width(&mut self, containing_block: Dimensions, previous_inline: &mut Option<(i32, i32)>) {
+        let style = self.get_style_node();
+
+        // `width` has initial value `auto`.
+        let auto = Keyword("auto".to_string());
+
+        // margin, border, and padding have initial value 0.
+        let zero = Length(0.0, Px);
+
+        {
+            let d = &mut self.dimensions;
+            let mut width = style.value("width").unwrap_or(auto.clone());
+
+            d.padding.left = style.lookup("padding-left", "padding", &zero).to_px().unwrap();
+            d.padding.right = style.lookup("padding-right", "padding", &zero).to_px().unwrap();
+
+            d.border.left = style.lookup("border-left-width", "border-width", &zero).to_px().unwrap();
+            d.border.right = style.lookup("border-right-width", "border-width", &zero).to_px().unwrap();
+
+            d.margin.left = style.lookup("margin-left", "margin", &zero).to_px().unwrap();
+            d.margin.right = style.lookup("margin-right", "margin", &zero).to_px().unwrap();
+
+            if width == auto {
+                let mut width_px = containing_block.content.width - d.padding.left - d.padding.right - d.border.left - d.border.right - d.margin.left - d.margin.right;
+                if let Some((inline_x, inline_y)) = *previous_inline {
+                    width_px -= inline_x as f32 - containing_block.content.x;
+                    println!("calculate_inline_width() - previous_inline: ({} {})", inline_x, inline_y);
+                    println!("---> containing_block.content: {:?}", containing_block.content);
+                    println!("---> width_px: {:?}", width_px);
+                }
+                width = Length(width_px, Px);
+            }
+            d.content.width = width.to_px().unwrap_or(width.percent_to_px(containing_block.content.width));
+        }
+
+        // if let Some(ref text) = style.get_string_if_text_node() {
+        //     self.calculate_text_size(*text);
+        // };
+    }
+
     /// Finish calculating the block's edge sizes, and position it within its containing block.
     ///
     /// http://www.w3.org/TR/CSS2/visudet.html#normal-block
@@ -394,6 +443,37 @@ impl<'a> LayoutBox<'a> {
 
         d.content.y = containing_block.content.y + containing_block.content.height +
                       d.margin.top + d.border.top + d.padding.top + float_rect.y;
+    }
+
+    fn calculate_inline_position(&mut self, containing_block: Dimensions, previous_inline: &mut Option<(i32, i32)>) {
+        let style = self.get_style_node();
+        let d = &mut self.dimensions;
+
+        // margin, border, and padding have initial value 0.
+        let zero = Length(0.0, Px);
+
+        // If margin-top or margin-bottom is `auto`, the used value is zero.
+        d.margin.top = style.lookup("margin-top", "margin", &zero).to_px().unwrap();
+        d.margin.bottom = style.lookup("margin-bottom", "margin", &zero).to_px().unwrap();
+
+        d.border.top = style.lookup("border-top-width", "border-width", &zero).to_px().unwrap();
+        d.border.bottom = style.lookup("border-bottom-width", "border-width", &zero).to_px().unwrap();
+
+        d.padding.top = style.lookup("padding-top", "padding", &zero).to_px().unwrap();
+        d.padding.bottom = style.lookup("padding-bottom", "padding", &zero).to_px().unwrap();
+
+        // Position the box below all the previous boxes in the container.
+        d.content.x = containing_block.content.x +
+                      d.margin.left + d.border.left + d.padding.left;
+        d.content.y = containing_block.content.y + containing_block.content.height +
+                      d.margin.top + d.border.top + d.padding.top;
+
+        if let Some((inline_x, inline_y)) = *previous_inline {
+            println!("calculate_inline_position() - previous_inline: ({} {})", inline_x, inline_y);
+            d.content.x = inline_x as f32;
+            d.content.y = inline_y as f32;
+            println!("---> d.content: {:?}", d.content);
+        }
     }
 
     fn shift_float_by_container_width(&mut self, container: Dimensions, float_rect: &mut Rect, previous_float: Option<Dimensions>) {
@@ -470,10 +550,129 @@ impl<'a> LayoutBox<'a> {
         return shift_by;
     }
 
+    fn split_text(&mut self, containing_block: Dimensions, text: &str, previous_inline: &mut Option<(i32, i32)>) {
+        let mut width_px = containing_block.content.width;
+
+        if let Some((inline_x, inline_y)) = *previous_inline {
+            width_px -= inline_x as f32 - containing_block.content.x;
+            println!("split_text: {} / previous_inline: ({} {})", text, inline_x, inline_y);
+        } else {
+            println!("split_text: {} / previous_inline: None", text);
+        }
+
+        println!("---> width_px: {}", width_px);
+
+        let mut result: Vec<String> = Vec::new();
+        let words: Vec<&str> = text.trim().split(' ').collect();
+
+        unsafe {
+            let handle = FontContextHandle::new();
+            let mut face: FT_Face = ptr::null_mut();
+            let mut error: FT_Error;
+            let filename = "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf".as_ptr() as *mut i8;
+            error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
+
+            if error != 0 || face.is_null() {
+                println!("failed to new face");
+            }
+
+            error = FT_Set_Pixel_Sizes(face, 0, 10);
+            if error != 0 {
+                println!("failed to set pixel size");
+            }
+
+            let space_width = calculate_text_dimension(" ", &face).width;
+
+            let mut text_width = 0;
+            let mut text_chunk = String::new();
+
+            for word in words.iter() {
+                let word_dimension = calculate_text_dimension(*word, &face);
+
+                if (text_width + word_dimension.width) >= width_px as i32 {
+                    result.push(text_chunk.to_string());
+                    text_chunk.clear();
+                    text_width = 0;
+                    width_px = containing_block.content.width;
+                }
+                text_width += (word_dimension.width + space_width);
+                text_chunk.push_str(*word);
+                text_chunk.push(' ');
+            }
+            if text_chunk.is_empty() == false {
+                result.push(text_chunk.to_string());
+            }
+        }
+
+        for new_str in result.into_iter() {
+            self.children.push(LayoutBox::new(TextNode(new_str)));
+        }
+    }
+
+    fn layout_text(&mut self, containing_block: Dimensions, previous_inline: &mut Option<(i32, i32)>) {
+        let mut text = String::new();
+        if let TextNode(ref s) = self.box_type {
+            text.push_str(s.as_slice());
+            println!("layout_text: {}", text);
+        } else {
+            panic!("Self is not a TextNode");
+        }
+
+        let d = &mut self.dimensions;
+
+        unsafe {
+            let handle = FontContextHandle::new();
+            let mut face: FT_Face = ptr::null_mut();
+            let mut error: FT_Error;
+            let filename = "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf".as_ptr() as *mut i8;
+            error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
+
+            if error != 0 || face.is_null() {
+                println!("failed to new face");
+            }
+
+            error = FT_Set_Pixel_Sizes(face, 0, 10);
+            if error != 0 {
+                println!("failed to set pixel size");
+            }
+
+            let text_dimension = calculate_text_dimension(text.as_slice(), &face);
+
+            d.content.width = text_dimension.width as f32;
+            d.content.height = text_dimension.height as f32;
+
+            if let Some((inline_x, inline_y)) = *previous_inline {
+                d.content.x = inline_x as f32;
+                d.content.y = inline_y as f32;
+                println!("---> previous_inline: ({} {})", inline_x, inline_y);
+                if d.content.max_x() > containing_block.content.max_x() {
+                    println!("---> d.content.max_x(): {} > containing_block.content.max_x(): {})", d.content.max_x(), containing_block.content.max_x());
+                    d.content.x = containing_block.content.x;
+                    d.content.y += d.content.height;
+                }
+
+                println!("------> containing_block.content: {:?}", containing_block.content);
+                println!("------> d.content: {:?}", d.content);
+            } else {
+                d.content.x = containing_block.content.x;
+                d.content.y = containing_block.content.y;
+                println!("---> previous_inline: None");
+                println!("------> containing_block.content: {:?}", containing_block.content);
+                println!("------> d.content: {:?}", d.content);
+            }
+
+        }
+    }
+
     /// Lay out the block's children within its content area.
     ///
     /// Sets `self.dimensions.height` to the total content height.
-    fn layout_block_children(&mut self, float_list: &mut Vec<(Float, Dimensions)>) {
+    fn layout_block_children(&mut self, float_list: &mut Vec<(Float, Dimensions)>, previous_inline: &mut Option<(i32, i32)>) {
+        let mut b_log = false;
+        if let AnonymousBlock = self.box_type {
+            b_log = true;
+            println!("AnonymousBlock - layout_block_children - {} ", self.children.len());
+        }
         let d = &mut self.dimensions;
 
         let mut left_float_rect: Rect = Default::default();
@@ -482,6 +681,8 @@ impl<'a> LayoutBox<'a> {
         let mut previous_left_float: Option<Dimensions> = None;
         let mut previous_right_float: Option<Dimensions> = None;
 
+        // let mut previous_inline: Option<(i32, i32)> = None;
+
         for child in self.children.iter_mut() {
             // Check clear
             d.content.height += child.calculate_clear_height(&self.float_info, d.content.max_y());
@@ -489,23 +690,51 @@ impl<'a> LayoutBox<'a> {
             if let FloatNode(style) = child.box_type {
                 match style.float_value().unwrap() {
                     Float::FloatLeft => {
-                        child.layout_float(*d, &mut left_float_rect, previous_left_float, float_list);
+                        child.layout_float(*d, &mut left_float_rect, previous_left_float, float_list, previous_inline);
                         previous_left_float = Some(child.dimensions);
                         previous_right_float = None;
                     },
                     Float::FloatRight => {
-                        child.layout_float(*d, &mut right_float_rect, previous_right_float, float_list);
+                        child.layout_float(*d, &mut right_float_rect, previous_right_float, float_list, previous_inline);
                         previous_right_float = Some(child.dimensions);
                         previous_left_float = None;
                     },
                 };
+                *previous_inline = None;
+            } else if let InlineNode(style) = child.box_type {
+                if let Some(text) = style.get_string_if_text_node() {
+                    child.split_text(*d, text.as_slice(), previous_inline);
+                    child.box_type = AnonymousBlock;
+
+                    child.layout_anonymous(*d, float_list, previous_inline);
+                } else {
+                    child.layout_inline(*d, float_list, previous_inline);
+
+                    *previous_inline = Some((child.dimensions.margin_box().max_x() as i32, child.dimensions.margin_box().y as i32));
+                    println!("After layout_inline() ---> previous_inline: {} {}", child.dimensions.margin_box().max_x(), child.dimensions.margin_box().y);
+                }
+
+                d.content.height = d.content.height + child.dimensions.margin_box().height;
+
+                previous_left_float = None;
+                previous_right_float = None;
+            } else if let TextNode(_) = child.box_type {
+                child.layout_text(*d, previous_inline);
+
+                d.content.height = d.content.height + child.dimensions.margin_box().height;
+
+                previous_left_float = None;
+                previous_right_float = None;
+                *previous_inline = Some((child.dimensions.margin_box().max_x() as i32, child.dimensions.margin_box().y as i32));
+                println!("After layout_text() ---> previous_inline: {} {}", child.dimensions.margin_box().max_x(), child.dimensions.margin_box().y);
             } else {
-                child.layout(*d, float_list);
+                child.layout(*d, float_list, previous_inline);
                 // Increment the height so each child is laid out below the previous one.
                 d.content.height = d.content.height + child.dimensions.margin_box().height;
 
                 previous_left_float = None;
                 previous_right_float = None;
+                *previous_inline = None;
             }
             // Update maximum float y
             if child.float_info.left_float_max_y > self.float_info.left_float_max_y {
@@ -585,14 +814,6 @@ impl<'a> LayoutBox<'a> {
             Some(value) => { self.dimensions.content.height = value.to_px().unwrap(); }
             _ => {}
         }
-
-        let text = style.get_string_if_text_node();
-        match text {
-            Some(ref text) => {
-                self.calculate_text_size(*text);
-            }
-            None => {},
-        };
     }
 
     fn calculate_float_height(&mut self) {
@@ -626,7 +847,7 @@ impl<'a> LayoutBox<'a> {
         let mut clear_height = 0f32;
 
         match self.box_type {
-            AnonymousBlock => return clear_height,
+            AnonymousBlock | TextNode(_) => return clear_height,
             _ => {}
         }
 
@@ -659,7 +880,7 @@ impl<'a> LayoutBox<'a> {
     /// Where a new inline child should go.
     fn get_inline_container(&mut self) -> &mut LayoutBox<'a> {
         match self.box_type {
-            InlineNode(_) | AnonymousBlock => self,
+            InlineNode(_) | TextNode(_) | AnonymousBlock => self,
             BlockNode(_) | FloatNode(_) => {
                 // If we've just generated an anonymous block box, keep using it.
                 // Otherwise, create a new one.
@@ -728,6 +949,11 @@ pub fn show(node: &LayoutBox, depth: usize) {
         BlockNode(node) => { add_tag_name(&mut info, node); "BlockNode" },
         InlineNode(node) => { add_tag_name(&mut info, node); "InlineNode" },
         FloatNode(node) => { add_tag_name(&mut info, node); "FloatNode" },
+        TextNode(ref text) => {
+            info.push_str("<text node> ");
+            info.push_str(text.as_slice());
+            " "
+        },
         AnonymousBlock => "AnonymousBlock",
     };
     info.push_str(box_type_str);

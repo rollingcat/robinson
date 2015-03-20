@@ -1,4 +1,4 @@
-use layout::{AnonymousBlock, BlockNode, InlineNode, FloatNode, LayoutBox, Rect};
+use layout::{AnonymousBlock, BlockNode, InlineNode, FloatNode, TextNode, LayoutBox, Rect};
 use css::{Value};
 use std::iter::{repeat, range};
 use std::num::Float;
@@ -85,7 +85,7 @@ fn update_font_info(layout_box: &LayoutBox, font_info: &mut Font_Info) {
                 font_info.line_height = val.to_px().unwrap() as i32;
             }
         },
-        AnonymousBlock => {}
+        TextNode(_) | AnonymousBlock => {}
     }
 }
 
@@ -137,10 +137,13 @@ fn render_borders(list: &mut DisplayList, layout_box: &LayoutBox) {
 }
 
 fn render_text(list: &mut DisplayList, layout_box: &LayoutBox, font_info: &Font_Info) {
-    if let InlineNode(_) = layout_box.box_type {
-        if let Some(text) = layout_box.get_style_node().get_string_if_text_node() {
-            list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content, font_info.clone()));
-        }
+    // if let InlineNode(_) = layout_box.box_type {
+    //     if let Some(text) = layout_box.get_style_node().get_string_if_text_node() {
+    //         list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content, font_info.clone()));
+    //     }
+    // }
+    if let TextNode(ref text) = layout_box.box_type {
+        list.push(DisplayCommand::Text(text.clone(), layout_box.dimensions.content, font_info.clone()));
     }
 }
 
@@ -151,7 +154,7 @@ fn get_color(layout_box: &LayoutBox, name: &str) -> Option<Color> {
             Some(Value::ColorValue(color)) => Some(color),
             _ => None
         },
-        AnonymousBlock => None
+        TextNode(_) | AnonymousBlock => None
     }
 }
 
