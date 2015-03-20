@@ -17,13 +17,13 @@ use std::ptr;
 use std::slice;
 
 #[derive(Show, Clone, Default)]
-pub struct Font_Info {
+pub struct FontInfo {
     pub size: i32,
     pub line_height: i32,
     pub color: Color,
 }
 
-impl Copy for Font_Info {}
+impl Copy for FontInfo {}
 
 #[derive(Default, Show)]
 pub struct Glyph {

@@ -46,6 +46,7 @@ pub enum Clear {
 static NONE_DISPLAY: [&'static str; 4] = ["head", "meta", "title", "style"];
 static DEFAULT_BLOCK: [&'static str; 11] =
 ["address", "blockquote", "dd", "div", "dl", "form", "p", "ul", "h1", "html", "body"];
+static DEFAULT_INHERIT: [&'static str; 3] = ["color", "font-size", "line-height"];
 
 impl<'a> StyledNode<'a> {
     /// Return the specified value of a property if it exists, otherwise `None`.
@@ -148,14 +149,17 @@ impl<'a> StyledNode<'a> {
 ///
 /// This finds only the specified values at the moment. Eventually it should be extended to find the
 /// computed values too, including inherited values.
-pub fn style_tree<'a>(root: &'a Rc<Node>, stylesheet: &'a Stylesheet) -> StyledNode<'a> {
+pub fn style_tree<'a>(root: &'a Rc<Node>, stylesheet: &'a Stylesheet, inherits: &PropertyMap) -> StyledNode<'a> {
+    let values = match root.node_type {
+        NodeType::Element(ref elem) => specified_values(root.clone(), elem, stylesheet, inherits),
+        NodeType::Text(_) => HashMap::new()
+    };
+    let new_inherits = get_inherit_style(&values);
+
     let mut new_style_node = StyledNode {
         node: root.clone(),
-        specified_values: match root.node_type {
-            NodeType::Element(ref elem) => specified_values(root.clone(), elem, stylesheet),
-            NodeType::Text(_) => HashMap::new()
-        },
-        children: root.children.iter().map(|child| style_tree(child, stylesheet)).collect(),
+        specified_values: values,
+        children: root.children.iter().map(|child| style_tree(child, stylesheet, &new_inherits)).collect(),
     };
 
     new_style_node.check_none_diplay_node();
@@ -165,7 +169,7 @@ pub fn style_tree<'a>(root: &'a Rc<Node>, stylesheet: &'a Stylesheet) -> StyledN
 /// Apply styles to a single element, returning the specified styles.
 ///
 /// To do: Allow multiple UA/author/user stylesheets, and implement the cascade.
-fn specified_values(node: Rc<Node>, elem: &ElementData, stylesheet: &Stylesheet) -> PropertyMap {
+fn specified_values(node: Rc<Node>, elem: &ElementData, stylesheet: &Stylesheet, inherits: &PropertyMap) -> PropertyMap {
     let mut values = HashMap::new();
     let mut rules = matching_rules(node, elem, stylesheet);
 
@@ -178,7 +182,26 @@ fn specified_values(node: Rc<Node>, elem: &ElementData, stylesheet: &Stylesheet)
     }
 
     apply_inline_style(&mut values, elem);
+    apply_inherit_style(&mut values, inherits);
     return values;
+}
+
+fn apply_inherit_style(values: &mut PropertyMap, inherits: &PropertyMap) {
+    for (name, value) in inherits.iter() {
+        if let None  = values.get(name) {
+            values.insert(name.clone(), value.clone());
+        };
+    }
+}
+
+fn get_inherit_style(values: &PropertyMap) -> PropertyMap {
+    let mut inherits = HashMap::new();
+    for (name, value) in values.iter() {
+        if DEFAULT_INHERIT.contains(&name.as_slice()) {
+            inherits.insert(name.clone(), value.clone());
+        }
+    }
+    inherits
 }
 
 /// A single CSS rule and the specificity of its most specific matching selector.

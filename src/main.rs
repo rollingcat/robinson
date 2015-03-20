@@ -10,6 +10,7 @@ use std::default::Default;
 use std::io::fs::File;
 use std::os::args;
 use std::rc::Rc;
+use std::collections::HashMap;
 
 mod css;
 mod dom;
@@ -60,7 +61,7 @@ fn main() {
     let stylesheet = css::parse(css_string);
     // css::show(stylesheet);
     // println!("=================================================");
-    let style_root = style::style_tree(&root_node, &stylesheet);
+    let style_root = style::style_tree(&root_node, &stylesheet, &HashMap::new());
     // style::show(&style_root, 1);
     // println!("=================================================");
     let layout_root = layout::layout_tree(&style_root, initial_containing_block);

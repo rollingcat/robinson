@@ -13,7 +13,7 @@ use freetype::freetype::{FT_Set_Transform, FT_Matrix, struct_FT_Matrix_};
 use freetype::freetype::{FT_Load_Char, FT_LOAD_RENDER};
 use freetype::freetype::{FT_Bitmap, FT_Int, FT_Set_Pixel_Sizes};
 
-use font::{Font_Info, Glyph, Text_Dimension, get_glyph, calculate_text_dimension, kerning_offset};
+use font::{FontInfo, Glyph, Text_Dimension, get_glyph, calculate_text_dimension, kerning_offset};
 
 use std::mem;
 use std::ptr;
@@ -40,52 +40,33 @@ pub fn paint(layout_root: &LayoutBox, bounds: Rect, background_color: Color) -> 
 #[derive(Show)]
 enum DisplayCommand {
     SolidColor(Color, Rect),
-    Text(String, Rect, Font_Info),
+    Text(String, Rect, FontInfo),
 }
 
 type DisplayList = Vec<DisplayCommand>;
 
 fn build_display_list(layout_root: &LayoutBox) -> DisplayList {
     let mut list = Vec::new();
-    let mut font_info : Font_Info = Default::default();
-    render_layout_box(&mut list, layout_root, &mut font_info);
+    render_layout_box(&mut list, layout_root);
     return list;
 }
 
-fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox, font_info: &mut Font_Info) {
+fn render_layout_box(list: &mut DisplayList, layout_box: &LayoutBox) {
     render_background(list, layout_box);
     render_borders(list, layout_box);
-    update_font_info(layout_box, font_info);
-    render_text(list, layout_box, font_info);
+    render_text(list, layout_box);
 
     for child in layout_box.children.iter() {
         match child.box_type {
             FloatNode(_) => continue,
-            _ => render_layout_box(list, child, &mut font_info.clone()),
+            _ => render_layout_box(list, child),
         };
     }
 
     for child in layout_box.children.iter() {
         if let FloatNode(style_node) = child.box_type {
-            render_layout_box(list, child, &mut font_info.clone());
+            render_layout_box(list, child);
         }
-    }
-}
-
-fn update_font_info(layout_box: &LayoutBox, font_info: &mut Font_Info) {
-    match layout_box.box_type {
-        BlockNode(style) | InlineNode(style) | FloatNode(style) => {
-            if let Some(Value::ColorValue(color)) = style.value("color") {
-                font_info.color = color;
-            }
-            if let Some(val) = style.value("font-size") {
-                font_info.size = val.to_px().unwrap() as i32;
-            }
-            if let Some(val) = style.value("line-height") {
-                font_info.line_height = val.to_px().unwrap() as i32;
-            }
-        },
-        TextNode(_) | AnonymousBlock => {}
     }
 }
 
@@ -136,14 +117,9 @@ fn render_borders(list: &mut DisplayList, layout_box: &LayoutBox) {
     }));
 }
 
-fn render_text(list: &mut DisplayList, layout_box: &LayoutBox, font_info: &Font_Info) {
-    // if let InlineNode(_) = layout_box.box_type {
-    //     if let Some(text) = layout_box.get_style_node().get_string_if_text_node() {
-    //         list.push(DisplayCommand::Text(text.to_string(), layout_box.dimensions.content, font_info.clone()));
-    //     }
-    // }
+fn render_text(list: &mut DisplayList, layout_box: &LayoutBox) {
     if let TextNode(ref text) = layout_box.box_type {
-        list.push(DisplayCommand::Text(text.clone(), layout_box.dimensions.content, font_info.clone()));
+        list.push(DisplayCommand::Text(text.clone(), layout_box.dimensions.content, layout_box.font_info));
     }
 }
 
@@ -190,7 +166,7 @@ impl Canvas {
         }
     }
 
-    fn paint_text(&mut self, string: &str, rect: &Rect, font_info: &Font_Info) {
+    fn paint_text(&mut self, string: &str, rect: &Rect, font_info: &FontInfo) {
         let handle = FontContextHandle::new();
         let start_idx = rect.y as usize * self.width + rect.x as usize;
 
@@ -204,7 +180,7 @@ impl Canvas {
                 println!("failed to new face");
             }
 
-            error = FT_Set_Pixel_Sizes(face, 0, 10);
+            error = FT_Set_Pixel_Sizes(face, 0, font_info.size as u32);
             if error != 0 {
                 println!("failed to set pixel size");
             }
@@ -215,13 +191,14 @@ impl Canvas {
             let mut c: char;
             let mut pc: char = 0 as char;
 
-            let mut text_canvas = Canvas::new(text_dimension.width as usize, text_dimension.height as usize, Color { r: 0, g: 0, b: 0, a: 0 });
+            let mut text_canvas = Canvas::new(text_dimension.width as usize, font_info.line_height as usize, Color { r: 0, g: 0, b: 0, a: 0 });
 
             for c in string.chars() {
                 let glyph = get_glyph(c, &face, true);
 
                 pen.x += kerning_offset(c, pc, &face) as i64;
-                pen.y = (text_dimension.height - glyph.ascent - text_dimension.baseline) as i64;
+                // pen.y = (text_dimension.height - glyph.ascent - text_dimension.baseline) as i64;
+                pen.y = (font_info.line_height - glyph.ascent - text_dimension.baseline) as i64;
 
                 text_canvas.paint_char(&glyph, pen.x, pen.y, &text_dimension);
 
