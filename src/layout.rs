@@ -275,9 +275,7 @@ impl<'a> LayoutBox<'a> {
                 println!("failed to set pixel size");
             }
 
-            let text_dimension = calculate_text_dimension(text.as_slice(), &face);
-
-            d.content.width = text_dimension.width as f32;
+            d.content.width = calculate_text_dimension(text.as_slice(), &face).width as f32;
             d.content.height = font_info.line_height as f32;
 
             if let Some((inline_x, inline_y)) = *previous_inline {
@@ -301,7 +299,7 @@ impl<'a> LayoutBox<'a> {
             let d = &mut self.dimensions;
             d.content.width = containing_block.content.width;
             d.content.x = containing_block.content.x;
-            d.content.y = containing_block.content.y;
+            d.content.y = containing_block.content.y + containing_block.content.height;
         }
         self.layout_block_children(float_list, previous_inline);
     }
@@ -703,14 +701,6 @@ impl<'a> LayoutBox<'a> {
             // Check clear
             d.content.height += child.calculate_clear_height(&self.float_info, d.content.max_y());
 
-            b_log = false;
-            if let AnonymousBlock = self.box_type {
-                if let AnonymousBlock = child.box_type {
-                    println!("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^6 b_log TRUE");
-                    b_log = true;
-                }
-            }
-
             match child.box_type {
                 BlockNode(style) => {
                     child.layout_block(*d, float_list, previous_inline);
@@ -783,64 +773,6 @@ impl<'a> LayoutBox<'a> {
                 self.float_info.right_float_max_y = child.float_info.right_float_max_y;
             }
         }
-    }
-
-    fn calculate_text_size(&mut self, text: &str) -> f32 {
-        let d = &mut self.dimensions;
-        let handle = FontContextHandle::new();
-
-        let words: Vec<&str> = text.split(' ').collect();
-
-        unsafe {
-            let mut face: FT_Face = ptr::null_mut();
-            let mut error: FT_Error;
-            let filename = "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf".as_ptr() as *mut i8;
-            error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
-
-            if error != 0 || face.is_null() {
-                println!("failed to new face");
-                return 0.0;
-            }
-
-            error = FT_Set_Pixel_Sizes(face, 0, self.font_info.size as u32);
-            if error != 0 {
-                println!("failed to set pixel size");
-                return 0.0;
-            }
-
-            let space_width = calculate_text_dimension(" ", &face).width;
-
-            let mut text_width = 0;
-            let mut text_height = 0;
-            let mut max_text_height = 0;
-            let mut line_break = false;
-
-            for word in words.iter() {
-                let word_dimension = calculate_text_dimension(*word, &face);
-
-                if word_dimension.height > max_text_height {
-                    max_text_height = word_dimension.height;
-                }
-
-                if (text_width + word_dimension.width) >= d.content.width as i32 {
-                    line_break = true;
-                    text_height += max_text_height;
-                    text_width = word_dimension.width;
-                } else {
-                    text_width += (word_dimension.width + space_width);
-                }
-            }
-
-            d.content.height = text_height as f32;
-            if line_break == false {
-                d.content.width = text_width as f32;
-                d.content.height = max_text_height as f32;
-            } else {
-                d.content.height += max_text_height as f32;
-            }
-        }
-
-        0.0
     }
 
     /// Height of a block-level non-replaced element in normal flow with overflow visible.
