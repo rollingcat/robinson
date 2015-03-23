@@ -55,6 +55,7 @@ pub enum Unit {
     Px,
     Em,
     Percent,
+    Default,
 }
 
 pub type Specificity = (usize, usize, usize);
@@ -248,6 +249,11 @@ impl Parser {
         }
         assert!(self.consume_char() == ';');
         self.consume_comment();
+
+        for decl in declarations.iter_mut() {
+            set_default_unit(decl);
+        }
+
         declarations
     }
 
@@ -295,9 +301,10 @@ impl Parser {
 
     fn parse_unit(&mut self) -> Unit {
         match &*self.parse_identifier().into_ascii_lowercase() {
-            "px" | "" => Unit::Px,
+            "px" => Unit::Px,
             "em" => Unit::Em,
             "%" => Unit::Percent,
+            "" => Unit::Default,
             _ => panic!("unrecognized unit")
         }
     }
@@ -424,5 +431,17 @@ fn convert_hex_to_color(input: &mut String) -> Color {
         g: FromStrRadix::from_str_radix(input.slice(2, 4), 0x10).unwrap(),
         b: FromStrRadix::from_str_radix(input.slice(4, 6), 0x10).unwrap(),
         a: 255,
+    }
+}
+
+static DEFAULT_EM: [&'static str; 1] = ["line-height"];
+
+fn set_default_unit(decl: &mut Declaration) {
+    if let Value::Length(val, Unit::Default) = decl.value {
+        if DEFAULT_EM.contains(&decl.name.as_slice()) {
+            decl.value = Value::Length(val, Unit::Em);
+        } else {
+            decl.value = Value::Length(val, Unit::Px);
+        }
     }
 }

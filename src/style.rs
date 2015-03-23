@@ -329,6 +329,7 @@ pub fn show(style_node: &StyledNode, depth: usize) {
                     &css::Unit::Px => "px",
                     &css::Unit::Em => "em",
                     &css::Unit::Percent => "%",
+                    &css::Unit::Default => "",
                 };
                 println!("{}: {}{}", key, len, unit_string);
             }
