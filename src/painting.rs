@@ -197,8 +197,9 @@ impl Canvas {
                 let glyph = get_glyph(c, &face, true);
 
                 pen.x += kerning_offset(c, pc, &face) as i64;
-                // pen.y = (text_dimension.height - glyph.ascent - text_dimension.baseline) as i64;
-                pen.y = (font_info.line_height - glyph.ascent - text_dimension.baseline) as i64;
+
+                let bearing = (font_info.line_height - text_dimension.height) / 2;
+                pen.y = (font_info.line_height - glyph.ascent - text_dimension.baseline - bearing) as i64;
 
                 text_canvas.paint_char(&glyph, pen.x, pen.y, &text_dimension);
 
