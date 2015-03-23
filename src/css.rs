@@ -108,12 +108,22 @@ impl Value {
 /// Parse a whole CSS stylesheet.
 pub fn parse(source: String) -> Stylesheet {
     let mut parser = Parser { pos: 0, input: source, color_map: ColorMap::new() };
-    Stylesheet { rules: parser.parse_rules() }
+    let mut style_sheet = Stylesheet { rules: parser.parse_rules() };
+    add_user_agent_style(&mut style_sheet);
+    style_sheet
 }
 
 pub fn parse_inline_style(source: String) -> Vec<Declaration> {
     let mut parser = Parser { pos: 0, input: source, color_map: ColorMap::new() };
     parser.parse_declarations()
+}
+
+static USER_AGENT_STYLE: &'static str = "a { color: blue; }";
+pub fn add_user_agent_style(styles: &mut Stylesheet) {
+    let mut parser = Parser { pos: 0, input: USER_AGENT_STYLE.to_string(), color_map: ColorMap::new() };
+    for rule in parser.parse_rules().into_iter() {
+        styles.rules.push(rule);
+    }
 }
 
 struct Parser {
