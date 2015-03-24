@@ -9,6 +9,7 @@
 /* last modified: 1 Dec 98 */
     html {
     font-size: 10px;
+    line-height: 1em;
     background-color: blue;
     color: white;
     }
@@ -126,8 +127,6 @@
     }
     #temp {
     background-color: green;
-    height: 60px;
-    clear: both;
     }
 </style>
 </head>
@@ -146,15 +145,15 @@
                         the world ends
                     </p>
                     <form action="http://www.w3.org/Style/CSS/Test/CSS1/current/" method="get">
+                        <p>
+                            bang
+                            <input type="radio" name="foo" value="off">
+                        </p>
+                        <p>
+                            whimper
+                            <input type="radio" name="foo2" value="on">
+                        </p>
                     </form>
-                    <p>
-                        bang
-                        <input type="radio" name="foo" value="off">
-                    </p>
-                    <p>
-                        whimper
-                        <input type="radio" name="foo2" value="on">
-                    </p>
                 </li>
                 <li>
                     i grow old
@@ -173,7 +172,7 @@
             </h1>
         </dd>
     </dl>
-    <p id="temp">
+    <p style="color: black; font-size: 1em; line-height: 1.3em; clear: both">
         This is a nonsensical document, but syntactically valid HTML 4.0. All 100%-conformant CSS1 agents should be able to render the document elements above this paragraph indistinguishably (to the pixel) from this
         <a href="http://www.w3.org/Style/CSS/Test/CSS1/current/sec5526c.gif">reference rendering,</a>
         (except font rasterization and form widgets). All discrepancies should be traceable to CSS1 implementation shortcomings. Once you have finished evaluating this test, you can return to the <a href="http://www.w3.org/Style/CSS/Test/CSS1/current/sec5526c.htm">parent page</a>.
