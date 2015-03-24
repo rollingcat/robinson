@@ -263,16 +263,18 @@ impl<'a> LayoutBox<'a> {
             let handle = FontContextHandle::new();
             let mut face: FT_Face = ptr::null_mut();
             let mut error: FT_Error;
-            let filename = "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf".as_ptr() as *mut i8;
+            let filename = "./examples/verdana.ttf".as_ptr() as *mut i8;
             error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
 
             if error != 0 || face.is_null() {
                 println!("failed to new face");
+                return;
             }
 
-            error = FT_Set_Pixel_Sizes(face, 0, 10);
+            error = FT_Set_Pixel_Sizes(face, 0, font_info.size as u32);
             if error != 0 {
-                println!("failed to set pixel size");
+                println!("failed to set pixel size: {}", font_info.size);
+                return;
             }
 
             d.content.width = calculate_text_dimension(text.as_slice(), &face).width as f32;
@@ -634,16 +636,18 @@ impl<'a> LayoutBox<'a> {
             let handle = FontContextHandle::new();
             let mut face: FT_Face = ptr::null_mut();
             let mut error: FT_Error;
-            let filename = "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf".as_ptr() as *mut i8;
+            let filename = "./examples/verdana.ttf".as_ptr() as *mut i8;
             error = FT_New_Face(handle.ctx.ctx, filename, 0, &mut face);
 
             if error != 0 || face.is_null() {
                 println!("failed to new face");
+                return;
             }
 
             error = FT_Set_Pixel_Sizes(face, 0, font_info.size as u32);
             if error != 0 {
-                println!("failed to set pixel size");
+                println!("failed to set pixel size: {}", font_info.size);
+                return;
             }
 
             let space_width = calculate_text_dimension(" ", &face).width;
