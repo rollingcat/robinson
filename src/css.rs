@@ -118,7 +118,8 @@ pub fn parse_inline_style(source: String) -> Vec<Declaration> {
     parser.parse_declarations()
 }
 
-static USER_AGENT_STYLE: &'static str = "a { color: blue; }";
+static USER_AGENT_STYLE: &'static str = "a { color: blue; text-decoration: underline; }";
+
 pub fn add_user_agent_style(styles: &mut Stylesheet) {
     let mut parser = Parser { pos: 0, input: USER_AGENT_STYLE.to_string(), color_map: ColorMap::new() };
     for rule in parser.parse_rules().into_iter() {

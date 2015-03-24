@@ -18,7 +18,7 @@ use freetype::freetype::{FT_UInt, FT_ULong, FT_Vector, struct_FT_Vector_};
 use freetype::freetype::{FT_Load_Char, FT_LOAD_RENDER};
 use freetype::freetype::{FT_Get_Kerning, FT_KERNING_DEFAULT};
 
-use font::{FontInfo, Glyph, Text_Dimension, get_glyph, calculate_text_dimension};
+use font::{TextDecoration, FontInfo, Glyph, Text_Dimension, get_glyph, calculate_text_dimension};
 
 use std::ptr;
 use std::mem;
@@ -165,6 +165,13 @@ impl<'a> LayoutBox<'a> {
                 }
                 if let Some(val) = style.value("line-height") {
                     self.font_info.line_height = val.to_px().unwrap() as i32;
+                }
+                if let Some(Value::Keyword(string)) = style.value("text-decoration") {
+                    if string == "underline" {
+                        self.font_info.deco = TextDecoration::Underline;
+                    } else {
+                        println!("text-decoration '{}' is not supported yet.", string);
+                    }
                 }
             },
             TextNode(_) | AnonymousBlock => {

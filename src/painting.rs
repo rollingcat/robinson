@@ -13,7 +13,7 @@ use freetype::freetype::{FT_Set_Transform, FT_Matrix, struct_FT_Matrix_};
 use freetype::freetype::{FT_Load_Char, FT_LOAD_RENDER};
 use freetype::freetype::{FT_Bitmap, FT_Int, FT_Set_Pixel_Sizes};
 
-use font::{FontInfo, Glyph, Text_Dimension, get_glyph, calculate_text_dimension, kerning_offset};
+use font::{TextDecoration, FontInfo, Glyph, Text_Dimension, get_glyph, calculate_text_dimension, kerning_offset};
 
 use std::mem;
 use std::ptr;
@@ -212,6 +212,8 @@ impl Canvas {
                 pc = c;
             }
 
+            text_canvas.paint_text_decoration(font_info);
+
             for y in range(0, text_canvas.height) {
                 for x in range(0, text_canvas.width) {
                     let src_col = text_canvas.pixels[y * text_canvas.width + x];
@@ -241,6 +243,17 @@ impl Canvas {
                 dst += 1;
             }
             dst += row_offset;
+        }
+    }
+
+    fn paint_text_decoration(&mut self, font_info: &FontInfo) {
+        if font_info.deco != TextDecoration::Underline {
+            return;
+        }
+
+        let pos = (self.width * (self.height - 2)) as usize;
+        for i in range(0, self.width) {
+            self.pixels[pos + i] = font_info.color;
         }
     }
 }

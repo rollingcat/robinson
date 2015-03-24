@@ -16,11 +16,28 @@ use std::mem;
 use std::ptr;
 use std::slice;
 
+#[derive(Show, Clone, PartialEq)]
+pub enum TextDecoration {
+    Normal,
+    Underline,
+    Overline,
+    LineThrough,
+}
+
+impl Default for TextDecoration {
+    fn default() -> TextDecoration {
+        TextDecoration::Normal
+    }
+}
+
+impl Copy for TextDecoration {}
+
 #[derive(Show, Clone, Default)]
 pub struct FontInfo {
     pub size: i32,
     pub line_height: i32,
     pub color: Color,
+    pub deco: TextDecoration,
 }
 
 impl Copy for FontInfo {}
