@@ -445,9 +445,6 @@ impl<'a> LayoutBox<'a> {
                 let mut width_px = containing_block.content.width - d.padding.left - d.padding.right - d.border.left - d.border.right - d.margin.left - d.margin.right;
                 if let Some((inline_x, inline_y)) = *previous_inline {
                     width_px -= inline_x as f32 - containing_block.content.x;
-                    println!("calculate_inline_width() - previous_inline: ({} {})", inline_x, inline_y);
-                    println!("---> containing_block.content: {:?}", containing_block.content);
-                    println!("---> width_px: {:?}", width_px);
                 }
                 width = Length(width_px, Px);
             }
@@ -544,10 +541,8 @@ impl<'a> LayoutBox<'a> {
                       d.margin.top + d.border.top + d.padding.top;
 
         if let Some((inline_x, inline_y)) = *previous_inline {
-            println!("calculate_inline_position() - previous_inline: ({} {})", inline_x, inline_y);
             d.content.x = inline_x as f32;
             d.content.y = inline_y as f32;
-            println!("---> d.content: {:?}", d.content);
         }
     }
 
@@ -630,12 +625,7 @@ impl<'a> LayoutBox<'a> {
 
         if let Some((inline_x, inline_y)) = *previous_inline {
             width_px -= inline_x as f32 - containing_block.content.x;
-            // println!("split_text: {} / previous_inline: ({} {})", text, inline_x, inline_y);
-        } else {
-            // println!("split_text: {} / previous_inline: None", text);
         }
-
-        // println!("---> width_px: {}", width_px);
 
         let mut result: Vec<String> = Vec::new();
         let words: Vec<&str> = text.trim().split(' ').collect();
@@ -675,7 +665,11 @@ impl<'a> LayoutBox<'a> {
                 text_chunk.push(' ');
             }
             if text_chunk.is_empty() == false {
-                result.push(text_chunk.to_string());
+                if text.char_at_reverse(0) == text_chunk.char_at_reverse(1) {
+                    result.push(text_chunk.trim().to_string());
+                } else {
+                    result.push(text_chunk);
+                }
             }
         }
 
@@ -735,7 +729,7 @@ impl<'a> LayoutBox<'a> {
                     } else {
                         child.layout_inline(*d, float_list, previous_inline);
 
-                        *previous_inline = Some((child.dimensions.margin_box().max_x() as i32, child.dimensions.margin_box().y as i32));
+                        // *previous_inline = Some((child.dimensions.margin_box().max_x() as i32, child.dimensions.margin_box().y as i32));
                     }
 
                     let diff = child.dimensions.margin_box().max_y() - d.content.max_y();

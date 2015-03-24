@@ -282,8 +282,6 @@ fn matches_ancestor(node: Rc<Node>, selector: &[SimpleSelector]) -> bool {
 
     match matching_node {
         Some(_) => if selector.len() == 1 {
-            println!("Match Descendant selector!!!");
-            dom::show(&matching_node.unwrap());
             return true
         },
         None => return false,

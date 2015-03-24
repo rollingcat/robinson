@@ -185,7 +185,9 @@ impl Canvas {
                 println!("failed to set pixel size");
             }
 
-            let text_dimension = calculate_text_dimension(string.as_slice(), &face);
+            let mut text_dimension = calculate_text_dimension(string.as_slice(), &face);
+            text_dimension.height = font_info.size;
+            text_dimension.baseline = calculate_text_dimension("g", &face).baseline;
 
             let mut pen = struct_FT_Vector_ { x: 0, y: 0 };
             let mut c: char;
